@@ -1,0 +1,27 @@
+#!/bin/sh
+
+chosen=$(printf "medradio\nhitradio\nchadafm\nmfmradio\nradioaswat\nmedi1radio\nradiomars\nmusopen" | dmenu -c -l 10 -fn JetbrainsMonoNerdFont-12 -p "Choose a station")
+
+[ -z "$chosen" ] && exit 1
+
+# medradio="http://medradio-maroc.ice.infomaniak.ch/medradio-maroc-64.mp3"
+medradio="https://streamer.eagrpservices.com/audio/medradio.mp3"
+hitradio="http://broadcast.ice.infomaniak.ch/hitradio-maroc-128.mp3"
+radioaswat="http://broadcast.ice.infomaniak.ch/aswat-high.mp3"
+chadafm="https://streamer.eagrpservices.com/audio/chadafm.mp3"
+radiomars="https://streamer.eagrpservices.com/audio/radiomars.mp3"
+# radiomars="https://www.radiomars.ma/ar/direct/"
+mfmradio="https://streamer.eagrpservices.com/audio/mfmradio.ogg"
+medi1radio="https://live.medi1.com/medi1"
+musopen="https://live.musopen.org:8085/streamvbr0"
+
+case "$chosen" in
+  "medradio") pkill mpv ; mpv $medradio ;;
+  "hitradio") pkill mpv ; mpv $hitradio ;;
+  "radioaswat") pkill mpv ; mpv $radioaswat ;;
+  "chadafm") pkill mpv ; mpv $chadafm ;;
+  "mfmradio") pkill mpv ; mpv $mfmradio ;;
+  "medi1radio") pkill mpv ; mpv $medi1radio ;;
+  "radiomars") pkill mpv ; mpv $radiomars ;;
+  "musopen") pkill mpv ; mpv $musopen ;;
+esac

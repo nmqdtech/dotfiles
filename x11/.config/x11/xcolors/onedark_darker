@@ -1,0 +1,84 @@
+#define base00 #1f2329
+#define base01 #e55561
+#define base02 #8ebd6b
+#define base03 #e2b86d
+#define base04 #4fa6ed
+#define base05 #bf68d9
+#define base06 #48b0bd
+#define base07 #c8ccd4
+#define base08 #535965
+#define base09 #e55561
+#define base0A #8ebd6b
+#define base0B #e2b86d
+#define base0C #4fa6ed
+#define base0D #bf68d9
+#define base0E #48b0bd
+#define base0F #c8ccd4
+
+#define base0G #abb2bf
+#
+*foreground:   base0G
+*background:   base00
+*cursorcolor:  base0G
+
+*color0:       base00
+*color1:       base01
+*color2:       base02
+*color3:       base03
+*color4:       base04
+*color5:       base05
+*color6:       base06
+*color7:       base07
+
+*color8:       base08
+*color9:       base09
+*color10:      base0A
+*color11:      base0B
+*color12:      base0C
+*color13:      base0D
+*color14:      base0E
+*color15:      base0F
+
+*normfgcolor:             base0F
+*normbgcolor:             base00
+*normbordercolor:         base00
+*selfgcolor:              base00
+*selbgcolor:              base0F
+*selbordercolor:          base0F
+*scratchnormfgcolor:      base0F
+*scratchnormbgcolor:      base00
+*scratchnormbordercolor:  base09
+*scratchselfgcolor:       base0F
+*scratchselbgcolor:       base00
+*scratchselbordercolor:   base0B
+*titlenormfgcolor:        base0F
+*titlenormbgcolor:        base00
+*titlenormbordercolor:    base00
+*titleselfgcolor:         base00
+*titleselbgcolor:         base0F
+*titleselbordercolor:     base00
+*urgfgcolor:              base0F
+*urgbgcolor:              base00
+*urgbordercolor:          base09
+*tagsfgcolor:             base0F
+*tagsbgcolor:             base00
+*tag1fgcolor:             base0A
+*tag1bgcolor:             base00
+*tag2fgcolor:             base0D
+*tag2bgcolor:             base00
+*tag3fgcolor:             base0B
+*tag3bgcolor:             base00
+*tag4fgcolor:             base07
+*tag4bgcolor:             base00
+*tag5fgcolor:             base0A
+*tag5bgcolor:             base00
+*tag6fgcolor:             base0E
+*tag6bgcolor:             base00
+*tag7fgcolor:             base09
+*tag7bgcolor:             base00
+*tag8fgcolor:             base0B
+*tag8bgcolor:             base00
+*tag9fgcolor:             base0D
+*tag9bgcolor:             base00
+*layoutfgcolor:           base0F
+*layoutbgcolor:           base00

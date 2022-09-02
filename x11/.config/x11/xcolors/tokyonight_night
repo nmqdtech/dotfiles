@@ -1,0 +1,87 @@
+! special
+*foreground:  #c0caf5
+*background:  #1a1b26
+*cursorcolor: #c0caf5
+
+! black
+*color0:      #15161e
+*color8:      #414868
+
+! red
+*color1:      #f7768e
+*color9:      #f7768e
+
+! green
+*color2:      #9ece6a
+*color10:     #9ece6a
+
+! yellow
+*color3:      #e0af68
+*color11:     #e0af68
+
+! blue
+*color4:      #7aa2f7
+*color12:     #7aa2f7
+
+! magenta
+*color5:      #bb9af7
+*color13:     #bb9af7
+
+! cyan
+*color6:      #7dcfff
+*color14:     #7dcfff
+
+! white
+*color7:      #a9b1d6
+*color15:     #c0caf5
+
+
+*normfgcolor: #c0caf5
+*normbgcolor: #1a1b26
+*normbordercolor: #1a1b26
+*selfgcolor: #1a1b26
+*selbgcolor: #c0caf5
+*selbordercolor: #bb9af7
+*scratchnormfgcolor: #c0caf5
+*scratchnormbgcolor: #1a1b26
+*scratchnormbordercolor: #f7768e
+*scratchselfgcolor: #c0caf5
+*scratchselbgcolor: #1a1b26
+*scratchselbordercolor: #9ece6a
+*titlenormfgcolor: #c0caf5
+*titlenormbgcolor: #1a1b26
+*titlenormbordercolor: #1a1b26
+*titleselfgcolor: #1a1b26
+*titleselbgcolor: #c0caf5
+*titleselbordercolor: #1a1b26
+*hidnormfgcolor: #1a1b26
+*hidnormbgcolor: #f7768e
+*hidnormbordercolor: #1a1b26
+*hidselfgcolor: #1a1b26
+*hidselbgcolor: #c0caf5
+*hidselbordercolor: #1a1b26
+*urgfgcolor: #c0caf5
+*urgbgcolor: #1a1b26
+*urgbordercolor: #f00000
+*tagsfgcolor: #c0caf5
+*tagsbgcolor: #1a1b26
+*tag1fgcolor: #89b482
+*tag1bgcolor: #1a1b26
+*tag2fgcolor: #d8a657
+*tag2bgcolor: #1a1b26
+*tag3fgcolor: #ef938e
+*tag3bgcolor: #1a1b26
+*tag4fgcolor: #d4be98
+*tag4bgcolor: #1a1b26
+*tag5fgcolor: #d3869b
+*tag5bgcolor: #1a1b26
+*tag6fgcolor: #7daea3
+*tag6bgcolor: #1a1b26
+*tag7fgcolor: #ea6962
+*tag7bgcolor: #1a1b26
+*tag8fgcolor: #d3869b
+*tag8bgcolor: #1a1b26
+*tag9fgcolor: #e1bb7e
+*tag9bgcolor: #1a1b26
+*layoutfgcolor: #c0caf5
+*layoutbgcolor: #1a1b26

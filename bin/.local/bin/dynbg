@@ -1,0 +1,26 @@
+#!/bin/bash
+
+walldir="$HOME/Pictures/"
+current="$(date +%R)"
+
+mtime="10:00"
+dtime="12:00"
+etime="18:00"
+ntime="22:00"
+
+mpic="$(find $walldir -maxdepth 1 -type f -name "*morning*jpg")"
+dpic="$(find $walldir -maxdepth 1 -type f -name "*day*jpg")"
+epic="$(find $walldir -maxdepth 1 -type f -name "*evening*jpg")"
+npic="$(find $walldir -maxdepth 1 -type f -name "*night*jpg")"
+
+if [[ $current > $mtime && $current < $dtime ]];then
+    chosen=$mpic
+elif [[ $current > $dtime && $current < $etime ]];then
+    chosen=$dpic
+elif [[ $current > $etime && $current < $ntime ]];then
+    chosen=$epic
+else
+    chosen=$npic
+fi
+
+xwallpaper --zoom $chosen

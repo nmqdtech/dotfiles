@@ -1,0 +1,226 @@
+#!/bin/sh
+# butterwaldl v2.0 - Robust version
+# Requires: curl, jq, nsxiv, dmenu or rofi
+
+# ---------------- CONFIG ----------------
+VIEWER="${VIEWER:-nsxiv}"
+walldir="${XDG_PICTURES_DIR:-$HOME/Pictures}/walls"
+cachedir="${XDG_CACHE_HOME:-$HOME/.cache}/butterwaldl"
+thumbdir="$cachedir/thumbs"
+metafile="$cachedir/meta.json"
+querycache="$cachedir/last_query"
+apikey="pCzSh0yEFqG8Q8eai9A1bG7a4qIeNXoT"
+
+max_pages=4
+thumb_quality="large"
+
+mkdir -p "$walldir" "$thumbdir"
+
+# ---------------- HELPERS ----------------
+die() {
+    printf '%s\n' "$1" >&2
+    notify-send "butterwaldl" "$1"
+    exit 1
+}
+
+depends() {
+    for p; do
+        command -v "$p" >/dev/null 2>&1 || die "Missing dependency: $p"
+    done
+}
+
+depends curl jq "$VIEWER" dmenu
+
+menu() {
+    prompt="$1"
+    options="$2"
+    multi="$3"
+    if [ "$use_rofi" = 1 ]; then
+        if [ "$multi" = 1 ]; then
+            selection="$(printf '%s\n' "$options" | rofi -dmenu -multi-select -i -p "$prompt")"
+        else
+            selection="$(printf '%s\n' "$options" | rofi -dmenu -i -p "$prompt")"
+        fi
+    else
+        selection="$(printf '%s\n' "$options" | dmenu -i -p "$prompt")"
+    fi
+    [ -z "$selection" ] && die "User cancelled."
+    printf '%s' "$selection"
+}
+
+# ---------------- FLAGS ----------------
+use_rofi=0
+interactive=1
+include_nsfw=0
+device="both"
+query=""
+resolution=""
+ratio=""
+purity=""
+sorting="relevance"
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -n|--nsfw) include_nsfw=1; interactive=0; shift ;;
+        --nsfw-only) include_nsfw=2; interactive=0; shift ;;
+        -q) query="$2"; interactive=0; shift 2 ;;
+        -r) resolution="$2"; interactive=0; shift 2 ;;
+        -a) ratio="$2"; interactive=0; shift 2 ;;
+        --desktop) device="desktop"; interactive=0; shift ;;
+        --mobile) device="mobile"; interactive=0; shift ;;
+        --both) device="both"; interactive=0; shift ;;
+        --rofi) use_rofi=1; shift ;;
+        --interactive) interactive=1; shift ;;
+        --clean) interactive=0; include_nsfw=0; device="both"; resolution="all"; ratio="all"; shift ;;
+        *) die "Unknown flag $1" ;;
+    esac
+done
+
+# ---------------- INTERACTIVE ----------------
+if [ "$interactive" = 1 ]; then
+    device="$(menu "Select device type" "Desktop
+Mobile
+Both")"
+    case "$device" in
+        Desktop) device="desktop" ;;
+        Mobile) device="mobile" ;;
+        Both) device="both" ;;
+    esac
+
+    [ -z "$query" ] && query="$(menu "Search Wallhaven" "$(cat "$querycache" 2>/dev/null)")"
+    [ -z "$query" ] && die "No query provided."
+    printf '%s' "$query" > "$querycache"
+
+    purity_choice="$(menu "Content filter" "SFW only
+SFW + Sketchy
+NSFW included
+NSFW only")"
+    case "$purity_choice" in
+        "SFW only") purity="100" ;;
+        "SFW + Sketchy") purity="110" ;;
+        "NSFW included") purity="111" ;;
+        "NSFW only") purity="011" ;;
+        *) purity="100" ;;
+    esac
+
+    sorting="$(menu "Sort by" "relevance
+random
+favorites
+views
+date_added
+toplist")"
+    [ -z "$sorting" ] && sorting="relevance"
+
+    case "$device" in
+        desktop)
+            resolution="$(menu "Select resolution (multi-select)" "1920x1080
+2560x1440
+3440x1440
+3840x2160
+All" 1)"
+            ratio="$(menu "Select ratio (multi-select)" "16x9
+21x9
+16x10
+All" 1)" ;;
+        mobile)
+            resolution="$(menu "Select resolution (multi-select)" "1080x1920
+1440x2560
+2160x3840
+All" 1)"
+            ratio="$(menu "Select ratio (multi-select)" "9x16
+19.5x9
+All" 1)" ;;
+        both)
+            resolution="$(menu "Select resolution (multi-select)" "1920x1080
+2560x1440
+3440x1440
+3840x2160
+1080x1920
+1440x2560
+2160x3840
+All" 1)"
+            ratio="$(menu "Select ratio (multi-select)" "16x9
+21x9
+16x10
+9x16
+19.5x9
+All" 1)" ;;
+    esac
+
+    [ "$resolution" = "All" ] && resolution=""
+    [ "$ratio" = "All" ] && ratio=""
+else
+    [ -z "$resolution" ] && resolution=""
+    [ -z "$ratio" ] && ratio=""
+    case "$include_nsfw" in
+        0) purity="100" ;;
+        1) purity="111" ;;
+        2) purity="011" ;;
+    esac
+fi
+
+# ---------------- FETCH METADATA ----------------
+query_url=$(printf '%s' "$query" | tr ' ' '+')
+api="https://wallhaven.cc/api/v1/search"
+[ -n "$apikey" ] && api="$api?apikey=$apikey"
+
+: > "$metafile"
+notify-send "butterwaldl" "Fetching wallpapers..."
+
+# Fetch pages sequentially into proper array
+tmpfile=$(mktemp)
+printf '[' > "$tmpfile"
+for page in $(seq "$max_pages"); do
+    resp=$(curl -s -G "$api" \
+        -d "q=$query_url" \
+        -d "page=$page" \
+        -d "sorting=$sorting" \
+        -d "purity=$purity" \
+        -d "atleast=$resolution" \
+        -d "ratios=$ratio")
+    # Extract .data array only
+    data=$(echo "$resp" | jq '.data')
+    [ "$page" -lt "$max_pages" ] && printf '%s,' "$data" >> "$tmpfile" || printf '%s' "$data" >> "$tmpfile"
+done
+printf ']' >> "$tmpfile"
+
+# Flatten to a single array
+jq -s 'flatten' "$tmpfile" > "$metafile"
+rm "$tmpfile"
+
+[ ! -s "$metafile" ] && die "No wallpapers found."
+
+# ---------------- DOWNLOAD THUMBNAILS ----------------
+notify-send "butterwaldl" "Downloading thumbnails..."
+jq -r '.[] | "\(.id)|\(.thumbs.large)"' < "$metafile" |
+while IFS='|' read -r id url; do
+    ext="${url##*.}"
+    [ -f "$thumbdir/$id.$ext" ] && continue
+    curl -sL "$url" -o "$thumbdir/$id.$ext" &
+done
+wait
+
+# ---------------- OPEN VIEWER ----------------
+notify-send "butterwaldl" "Opening gallery..."
+selected="$("$VIEWER" -otf -z 200 "$thumbdir")"
+[ -z "$selected" ] && die "No images selected."
+
+# ---------------- DOWNLOAD FULL-RES ----------------
+notify-send "butterwaldl" "Downloading full resolution wallpapers..."
+printf '%s\n' "$selected" |
+while read -r img; do
+    id="$(basename "$img")"
+    id="${id%.*}"
+    url="$(jq -r --arg id "$id" '.[] | select(.id==$id) | .path' "$metafile")"
+    [ -z "$url" ] && continue
+    filename="${url##*/}"
+    [ -f "$walldir/$filename" ] && continue
+    notify-send "Downloading" "$filename"
+    curl -sL "$url" -o "$walldir/$filename" &
+done
+wait
+
+# ---------------- FINAL VIEW ----------------
+notify-send "butterwaldl" "Download complete."
+cd "$walldir" || exit
+"$VIEWER" .

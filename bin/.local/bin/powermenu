@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# New — launcher-agnostic
+. menu || exit 1
+
+case "$(printf "🔒 lock \
+    \n🚪 leave $WM \
+    \n♻️ renew $WM \
+    \n🐻 hibernate \
+    \n🔃 reboot \
+    \n🖥️shutdon \
+    \n💤 sleep \
+    \n📺 display off" \
+    | menu -l 10 -p 'Action: ')" in
+	'🔒 lock') slock ;;
+	# "🚪 leave $WM") kill -TERM "$(wmpid)" ;;
+	# "♻️ renew $WM") kill -HUP "$(wmpid)" ;;
+	# '🐻 hibernate') slock $ctl hibernate -i ;;
+	# '💤 sleep') slock $ctl suspend -i ;;
+	'🔃 reboot') doas reboot -i ;;
+	'🖥️shutdown')doas poweroff -i ;;
+	'📺 display off') xset dpms force off ;;
+	*) exit 1 ;;
+esac

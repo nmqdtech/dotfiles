@@ -1,0 +1,81 @@
+! special
+*foreground:   #d8caac
+*background:   #323d43
+*cursorColor:  #d8caac
+
+! black
+*color0:       #868d80
+*color8:       #868d80
+
+! red
+*color1:       #e68183
+*color9:       #e68183
+
+! green
+*color2:       #a7c080
+*color10:      #a7c080
+
+! yellow
+*color3:       #d9bb80
+*color11:      #d9bb80
+
+! blue
+*color4:       #89beba
+*color12:      #89beba
+
+! magenta
+*color5:       #d3a0bc
+*color13:      #d3a0bc
+
+! cyan
+*color6:       #87c095
+*color14:      #87c095
+
+! white
+*color7:       #d8caac
+*color15:      #d8caac
+
+
+*normfgcolor: #d8caac
+*normbgcolor: #323d43
+*normbordercolor: #323d43
+*selfgcolor: #323d43
+*selbgcolor: #d8caac
+*selbordercolor: #d3a0bc
+*scratchnormfgcolor: #d8caac
+*scratchnormbgcolor: #323d43
+*scratchnormbordercolor: #e68183
+*scratchselfgcolor: #d8caac
+*scratchselbgcolor: #323d43
+*scratchselbordercolor: #a7c080
+*titlenormfgcolor: #d8caac
+*titlenormbgcolor: #323d43
+*titlenormbordercolor: #323d43
+*titleselfgcolor: #323d43
+*titleselbgcolor: #d8caac
+*titleselbordercolor: #323d43
+*urgfgcolor: #d8caac
+*urgbgcolor: #323d43
+*urgbordercolor: #f00000
+*tagsfgcolor: #d8caac
+*tagsbgcolor: #323d43
+*tag1fgcolor: #89b482
+*tag1bgcolor: #323d43
+*tag2fgcolor: #d8a657
+*tag2bgcolor: #323d43
+*tag3fgcolor: #ef938e
+*tag3bgcolor: #323d43
+*tag4fgcolor: #d4be98
+*tag4bgcolor: #323d43
+*tag5fgcolor: #d3869b
+*tag5bgcolor: #323d43
+*tag6fgcolor: #7daea3
+*tag6bgcolor: #323d43
+*tag7fgcolor: #ea6962
+*tag7bgcolor: #323d43
+*tag8fgcolor: #d3869b
+*tag8bgcolor: #323d43
+*tag9fgcolor: #e1bb7e
+*tag9bgcolor: #323d43
+*layoutfgcolor: #d8caac
+*layoutbgcolor: #323d43

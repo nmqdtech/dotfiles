@@ -1,0 +1,66 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/x11/xinitrc
+#
+#  Started by: startx "$XINITRC" -- "$XSERVERRC" vt1
+#  (XINITRC and XSERVERRC are exported from profile)
+#
+#  This file does three things only:
+#    1. Load Xresources
+#    2. Run session services (via autostart)
+#    3. Exec the window manager
+#
+#  To add/remove startup services: edit autostart, not this file.
+# =============================================================
+
+
+# =============================================================
+#  Xresources
+# =============================================================
+
+# System defaults first, then user overrides
+[ -f /etc/X11/xinit/.Xresources ] && xrdb -merge /etc/X11/xinit/.Xresources
+[ -f /etc/X11/xinit/.Xmodmap   ] && xmodmap /etc/X11/xinit/.Xmodmap
+
+xrdb -merge "$XDG_CONFIG_HOME/x11/xresources"
+
+[ -f "$HOME/.Xmodmap" ] && xmodmap "$HOME/.Xmodmap"
+
+
+# =============================================================
+#  System xinitrc.d scripts (Void Linux / distro hooks)
+# =============================================================
+
+if [ -d /etc/X11/xinit/xinitrc.d ]; then
+    for f in /etc/X11/xinit/xinitrc.d/?*.sh; do
+        [ -x "$f" ] && . "$f"
+    done
+    unset f
+fi
+
+
+# =============================================================
+#  Session
+# =============================================================
+
+session="${1:-dwm}"
+
+# Launch all background services
+"$XDG_CONFIG_HOME/x11/autostart"
+
+# Start the window manager inside a dbus session.
+# dbus-run-session ensures a proper bus is available for
+# portals, notifications, and keyring integration.
+exec dbus-run-session -- sh -c "
+    eval \$(gnome-keyring-daemon --start --components=secrets,ssh 2>/dev/null)
+    export SSH_AUTH_SOCK
+
+    case '$session' in
+        dwm)     exec /usr/local/bin/dwm ;;
+        bspwm)   exec bspwm              ;;
+        awesome) exec awesome            ;;
+        i3|i3wm) exec i3                 ;;
+        openbox) exec openbox-session    ;;
+        *)       exec '$session'         ;;
+    esac
+"

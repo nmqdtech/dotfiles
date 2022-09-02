@@ -1,0 +1,472 @@
+#!/bin/sh
+# =============================================================
+#  rec — unified recording script
+#
+#  Records audio, video (webcam), or screen.
+#  Handles Ctrl+C, rec stop, timed recordings, and crashes
+#  cleanly in all cases.
+#
+#  Usage:
+#    rec                    interactive menu
+#    rec audio [seconds]    record audio (opus/ogg)
+#    rec video [seconds]    record webcam + audio (mkv)
+#    rec screen [seconds]   record screen + audio (mkv)
+#    rec screen-silent [s]  record screen, no audio (mkv)
+#    rec clip [seconds]     quick timed screen clip (default 30s)
+#    rec stop               stop any running recording
+#    rec play               play last recording
+#    rec ls                 list recordings
+#
+#  Flags (before the command):
+#    -o <path>   custom output file
+#    -d <dev>    audio device override
+#    -q          quiet (no notifications)
+#    -h          help
+#
+#  Config (env vars):
+#    REC_AUDIO_DEV      audio input device
+#    REC_AUDIO_BITRATE  opus bitrate for general recording (128k)
+#    REC_VOICE_BITRATE  opus bitrate for voice (32k)
+#    REC_CHANNELS       channels for general recording (2)
+#    REC_VIDEO_DEV      webcam device (/dev/video0)
+#    REC_QUALITY        libx264 crf (23)
+#    REC_AUDIO_RATE     sample rate (48000)
+# =============================================================
+
+set -eu
+
+# =============================================================
+#  Config
+# =============================================================
+
+REC_AUDIO_DIR="${REC_AUDIO_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/recordings/audio}"
+REC_VIDEO_DIR="${REC_VIDEO_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/recordings/video}"
+REC_SCREEN_DIR="${REC_SCREEN_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/recordings/screen}"
+REC_AUDIO_RATE="${REC_AUDIO_RATE:-48000}"
+REC_VIDEO_DEV="${REC_VIDEO_DEV:-/dev/video0}"
+REC_QUALITY="${REC_QUALITY:-23}"
+REC_AUDIO_BITRATE="${REC_AUDIO_BITRATE:-128k}"
+REC_VOICE_BITRATE="${REC_VOICE_BITRATE:-32k}"
+REC_CHANNELS="${REC_CHANNELS:-2}"
+
+# State files — use runtime dir if available, else /tmp
+_rundir="${XDG_RUNTIME_DIR:-/tmp}"
+REC_PIDFILE="$_rundir/rec.pid"       # pid of the recorder process (pw-record or ffmpeg)
+REC_OUTFILE="$_rundir/rec.out"       # path of the output file being recorded
+REC_TMPFILE="$_rundir/rec.tmp"       # temp file path (for audio WAV stage)
+
+_quiet=0
+_output=""
+_audio_dev="${REC_AUDIO_DEV:-default}"
+_duration=""
+
+mkdir -p "$REC_AUDIO_DIR" "$REC_VIDEO_DIR" "$REC_SCREEN_DIR"
+
+# =============================================================
+#  Helpers
+# =============================================================
+
+_notify() {
+    [ "$_quiet" -eq 1 ] && return
+    notify-send -a rec "$@" 2>/dev/null || printf '%s\n' "$*" >&2
+}
+
+_ts() { date '+%Y-%m-%d_%H-%M-%S'; }
+
+_die() { printf 'rec: %s\n' "$*" >&2; exit 1; }
+
+_recorder_running() {
+    [ -f "$REC_PIDFILE" ] \
+        && _pid="$(cat "$REC_PIDFILE" 2>/dev/null)" \
+        && [ -n "$_pid" ] \
+        && kill -0 "$_pid" 2>/dev/null
+}
+
+_save_state() {
+    printf '%s' "$1" > "$REC_PIDFILE"   # recorder pid
+    printf '%s' "$2" > "$REC_OUTFILE"   # output file
+    [ -n "${3:-}" ] && printf '%s' "$3" > "$REC_TMPFILE" || rm -f "$REC_TMPFILE"
+}
+
+_clear_state() {
+    rm -f "$REC_PIDFILE" "$REC_OUTFILE" "$REC_TMPFILE"
+}
+
+_last_recording() {
+    find "$REC_AUDIO_DIR" "$REC_VIDEO_DIR" "$REC_SCREEN_DIR" \
+        -type f \( -iname '*.oga' -o -iname '*.mkv' -o -iname '*.wav' \) \
+        -printf '%T@ %p\n' 2>/dev/null \
+    | sort -rn | head -1 | cut -d' ' -f2-
+}
+
+# =============================================================
+#  Stop — works from any context (Ctrl+C trap or 'rec stop')
+#
+#  Strategy: send SIGTERM to the recorder pid directly.
+#  - ffmpeg handles SIGTERM gracefully for MKV: it flushes
+#    encoders and writes the final index clusters.
+#  - pw-record handles SIGTERM by closing the file properly.
+#  - We wait for the process to exit, then run any post-
+#    processing (audio WAV → opus transcode).
+#  - SIGKILL is only sent if SIGTERM doesn't work within 5s.
+# =============================================================
+
+_stop_recorder() {
+    _pid="${1:-}"
+    [ -z "$_pid" ] && return 0
+
+    # Politely ask it to stop
+    kill -TERM "$_pid" 2>/dev/null || return 0
+
+    # Wait up to 5 seconds for clean exit
+    _waited=0
+    while kill -0 "$_pid" 2>/dev/null && [ "$_waited" -lt 50 ]; do
+        sleep 0.1
+        _waited=$(( _waited + 1 ))
+    done
+
+    # Force kill if still alive
+    kill -0 "$_pid" 2>/dev/null && kill -KILL "$_pid" 2>/dev/null || true
+    wait "$_pid" 2>/dev/null || true
+}
+
+# =============================================================
+#  Stop command ('rec stop' from another terminal)
+# =============================================================
+
+_stop() {
+    if ! _recorder_running; then
+        printf 'rec: no recording in progress\n'
+        return 0
+    fi
+
+    _pid="$(cat "$REC_PIDFILE")"
+    _out="$(cat "$REC_OUTFILE" 2>/dev/null || printf '')"
+    _tmp="$(cat "$REC_TMPFILE" 2>/dev/null || printf '')"
+
+    _stop_recorder "$_pid"
+
+    # If there's a tmp WAV file, the audio transcode didn't run yet
+    # (this means rec was killed externally before its trap fired)
+    if [ -n "$_tmp" ] && [ -f "$_tmp" ] && [ -s "$_tmp" ]; then
+        printf 'rec: transcoding audio...\n'
+        ffmpeg -i "$_tmp" \
+            -c:a libopus -b:a "$REC_AUDIO_BITRATE" \
+            -ar "$REC_AUDIO_RATE" -ac "$REC_CHANNELS" \
+            -application audio \
+            -y "$_out" >/dev/null 2>&1 \
+        && printf 'Saved: %s\n' "$_out" \
+        || printf 'rec: transcode failed\n' >&2
+        rm -f "$_tmp"
+    else
+        [ -n "$_out" ] && printf 'Saved: %s\n' "$_out"
+    fi
+
+    _notify " rec" "Stopped${_out:+: $(basename "$_out")}"
+    _clear_state
+}
+
+# =============================================================
+#  Audio recording
+#
+#  pw-record → WAV (handles SIGTERM cleanly, no container issue)
+#  then ffmpeg transcodes WAV → opus/ogg offline.
+#  The two-stage approach means the output file is always valid:
+#  either the transcode completed or it didn't run yet.
+# =============================================================
+
+_record_audio() {
+    outfile="${_output:-$REC_AUDIO_DIR/$(_ts).oga}"
+    tmpwav="/tmp/rec-audio-$$.wav"
+
+    _cleanup_audio() {
+        _stop_recorder "${pw_pid:-}"
+        if [ -f "$tmpwav" ] && [ -s "$tmpwav" ]; then
+            _sz="$(stat -c%s "$tmpwav" 2>/dev/null || printf 0)"
+            if [ "$_sz" -gt 4096 ]; then
+                ffmpeg -i "$tmpwav" \
+                    -c:a libopus \
+                    -b:a "${_voice_mode:+$REC_VOICE_BITRATE}${_voice_mode:-$REC_AUDIO_BITRATE}" \
+                    -ar "$REC_AUDIO_RATE" \
+                    -ac "${_voice_mode:+1}${_voice_mode:-$REC_CHANNELS}" \
+                    -application "${_voice_mode:+voip}${_voice_mode:-audio}" \
+                    -y "$outfile" >/dev/null 2>&1 \
+                && {
+                    _notify " Audio saved" "$(basename "$outfile")"
+                    printf 'Saved: %s\n' "$outfile"
+                } || printf 'rec: transcode failed\n' >&2
+            else
+                printf 'rec: recording too short or capture failed\n' >&2
+            fi
+        fi
+        rm -f "$tmpwav"
+        _clear_state
+    }
+    trap _cleanup_audio EXIT INT TERM HUP
+
+    _notify "⏺ Recording audio" "Ctrl+C or 'rec stop' to finish"
+
+    pw-record \
+        --target="$_audio_dev" \
+        --rate="$REC_AUDIO_RATE" \
+        --channels=1 \
+        "$tmpwav" >/dev/null 2>&1 &
+    pw_pid=$!
+
+    # Save state so 'rec stop' can find the process and tmp file
+    _save_state "$pw_pid" "$outfile" "$tmpwav"
+
+    if [ -n "$_duration" ]; then
+        sleep "$_duration"
+        # _cleanup_audio fires via EXIT trap
+    else
+        wait "$pw_pid" 2>/dev/null || true
+        # _cleanup_audio fires via EXIT trap
+    fi
+}
+
+# =============================================================
+#  Video recording (webcam)
+#
+#  Uses MKV — valid container even on unclean stop.
+#  ffmpeg receives SIGTERM directly (not via process group)
+#  because we saved its pid and send to it specifically.
+#  MKV finalizes gracefully on SIGTERM.
+# =============================================================
+
+_record_video() {
+    outfile="${_output:-$REC_VIDEO_DIR/$(_ts).mkv}"
+
+    [ -e "$REC_VIDEO_DEV" ] || _die "webcam not found: $REC_VIDEO_DEV"
+
+    _cleanup_video() {
+        _stop_recorder "${ffmpeg_pid:-}"
+        if [ -f "$outfile" ] && [ -s "$outfile" ]; then
+            _notify " Video saved" "$(basename "$outfile")"
+            printf 'Saved: %s\n' "$outfile"
+        else
+            printf 'rec: video file empty or missing\n' >&2
+        fi
+        _clear_state
+    }
+    trap _cleanup_video EXIT INT TERM HUP
+
+    _notify "⏺ Recording video" "Ctrl+C or 'rec stop' to finish"
+
+    # Run ffmpeg with stdin closed (/dev/null) so it doesn't
+    # consume terminal input, and in its own process group
+    # so Ctrl+C in the terminal doesn't kill it directly —
+    # our trap handles shutdown by pid.
+    setsid ffmpeg \
+        -f v4l2 -i "$REC_VIDEO_DEV" \
+        -f pulse -i "$_audio_dev" \
+        -c:v libx264 -crf "$REC_QUALITY" -preset fast \
+        -c:a libopus -b:a "$REC_AUDIO_BITRATE" \
+        ${_duration:+-t "$_duration"} \
+        -y "$outfile" \
+        </dev/null >/dev/null 2>&1 &
+    ffmpeg_pid=$!
+
+    _save_state "$ffmpeg_pid" "$outfile"
+
+    if [ -n "$_duration" ]; then
+        sleep "$_duration"
+    else
+        wait "$ffmpeg_pid" 2>/dev/null || true
+    fi
+}
+
+# =============================================================
+#  Screen recording
+# =============================================================
+
+_record_screen() {
+    _with_audio="${1:-1}"
+    outfile="${_output:-$REC_SCREEN_DIR/$(_ts).mkv}"
+
+    _display="${DISPLAY:-:0}"
+    _geo="$(xdpyinfo 2>/dev/null | awk '/dimensions/{print $2}' | head -1)"
+    [ -z "$_geo" ] && _geo="1920x1080"
+
+    _cleanup_screen() {
+        _stop_recorder "${ffmpeg_pid:-}"
+        if [ -f "$outfile" ] && [ -s "$outfile" ]; then
+            _notify " Screen saved" "$(basename "$outfile")"
+            printf 'Saved: %s\n' "$outfile"
+        else
+            printf 'rec: screen recording empty or missing\n' >&2
+        fi
+        _clear_state
+    }
+    trap _cleanup_screen EXIT INT TERM HUP
+
+    _notify "⏺ Recording screen" "${_geo} — Ctrl+C or 'rec stop' to finish"
+
+    if [ "$_with_audio" -eq 1 ]; then
+        setsid ffmpeg \
+            -f x11grab -video_size "$_geo" -framerate 30 \
+            -i "${_display}+0,0" \
+            -f pulse -i "$_audio_dev" \
+            -c:v libx264 -crf "$REC_QUALITY" -preset fast \
+            -c:a libopus -b:a "$REC_AUDIO_BITRATE" \
+            ${_duration:+-t "$_duration"} \
+            -y "$outfile" \
+            </dev/null >/dev/null 2>&1 &
+    else
+        setsid ffmpeg \
+            -f x11grab -video_size "$_geo" -framerate 30 \
+            -i "${_display}+0,0" \
+            -c:v libx264 -crf "$REC_QUALITY" -preset fast \
+            -an \
+            ${_duration:+-t "$_duration"} \
+            -y "$outfile" \
+            </dev/null >/dev/null 2>&1 &
+    fi
+
+    ffmpeg_pid=$!
+    _save_state "$ffmpeg_pid" "$outfile"
+
+    if [ -n "$_duration" ]; then
+        sleep "$_duration"
+    else
+        wait "$ffmpeg_pid" 2>/dev/null || true
+    fi
+}
+
+# =============================================================
+#  Quick clip
+# =============================================================
+
+_record_clip() {
+    _duration="${1:-30}"
+    _record_screen 1
+}
+
+# =============================================================
+#  Play last recording
+# =============================================================
+
+_play_last() {
+    last="$(_last_recording)"
+    [ -z "$last" ] && _die "no recordings found"
+    printf 'Playing: %s\n' "$last"
+    mpv --really-quiet "$last" &
+}
+
+# =============================================================
+#  List recordings
+# =============================================================
+
+_list() {
+    for dir in "$REC_AUDIO_DIR" "$REC_VIDEO_DIR" "$REC_SCREEN_DIR"; do
+        label="$(basename "$dir")"
+        printf '\033[33m %s:\033[0m\n' "$label"
+        ls -lht "$dir" 2>/dev/null | grep -v '^total' | head -5 \
+            || printf '  (empty)\n'
+        printf '\n'
+    done
+}
+
+# =============================================================
+#  Interactive menu
+# =============================================================
+
+_menu() {
+    . menu 2>/dev/null || {
+        printf 'rec: menu not found — use: rec <audio|video|screen|clip|stop>\n'
+        _usage
+        exit 1
+    }
+
+    if _recorder_running; then
+        _out="$(cat "$REC_OUTFILE" 2>/dev/null || printf 'unknown')"
+        _options="$(printf \
+            'stop (%s)\naudio\naudio 30s\naudio 60s\nvideo\nscreen\nscreen silent\nclip 30s\nclip 60s\nclip 120s\nplay last\nlist' \
+            "$(basename "$_out")")"
+    else
+        _options="$(printf \
+            'audio\naudio 30s\naudio 60s\nvideo\nscreen\nscreen silent\nclip 30s\nclip 60s\nclip 120s\nplay last\nlist')"
+    fi
+
+    choice="$(printf '%s\n' "$_options" | menu -p "rec:" -l 12)" || exit 0
+    [ -z "$choice" ] && exit 0
+
+    case "$choice" in
+        stop*)              _stop          ;;
+        audio)              _record_audio  ;;
+        "audio 30s")        _duration=30;  _record_audio ;;
+        "audio 60s")        _duration=60;  _record_audio ;;
+        video)              _record_video  ;;
+        screen)             _record_screen 1 ;;
+        "screen silent")    _record_screen 0 ;;
+        "clip 30s")         _record_clip 30  ;;
+        "clip 60s")         _record_clip 60  ;;
+        "clip 120s")        _record_clip 120 ;;
+        "play last")        _play_last     ;;
+        list)               _list; printf '\nPress ENTER'; read -r _ ;;
+    esac
+}
+
+# =============================================================
+#  Usage
+# =============================================================
+
+_usage() {
+    cat << 'USAGE'
+rec — unified recording tool
+
+Usage:
+  rec                    interactive menu
+  rec audio [seconds]    record mic → opus/ogg
+  rec video [seconds]    record webcam + mic → mkv
+  rec screen [seconds]   record screen + mic → mkv
+  rec screen-silent [s]  record screen only → mkv
+  rec clip [seconds]     timed screen clip (default: 30s)
+  rec stop               stop current recording cleanly
+  rec play               play last recording in mpv
+  rec ls                 list recordings
+
+Flags (before command):
+  -o <file>   custom output path
+  -d <dev>    audio device (PipeWire target)
+  -q          quiet (no notifications)
+  -h          this help
+
+Environment:
+  REC_AUDIO_DEV      audio input (pactl list sources short)
+  REC_AUDIO_BITRATE  128k
+  REC_CHANNELS       2 (stereo)
+  REC_VIDEO_DEV      /dev/video0
+  REC_QUALITY        23 (crf, lower = better quality)
+USAGE
+}
+
+# =============================================================
+#  Argument parsing
+# =============================================================
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) _output="$2";    shift 2 ;;
+        -d) _audio_dev="$2"; shift 2 ;;
+        -q) _quiet=1;        shift   ;;
+        -h) _usage;          exit 0  ;;
+        --) shift; break             ;;
+        -*) _die "unknown flag: $1"  ;;
+        *)  break                    ;;
+    esac
+done
+
+case "${1:-}" in
+    "")             _menu ;;
+    audio)          shift; _duration="${1:-}"; _record_audio    ;;
+    video)          shift; _duration="${1:-}"; _record_video    ;;
+    screen)         shift; _duration="${1:-}"; _record_screen 1 ;;
+    screen-silent)  shift; _duration="${1:-}"; _record_screen 0 ;;
+    clip)           shift; _record_clip "${1:-30}"              ;;
+    stop)           _stop    ;;
+    play)           _play_last ;;
+    ls|list)        _list    ;;
+    help|-h|--help) _usage   ;;
+    *) _die "unknown command: $1. Try 'rec help'" ;;
+esac

@@ -1,0 +1,191 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/shell/profile
+#
+#  Login environment — sourced once per login session.
+#  Shared between bash and zsh via their respective *profile files.
+#
+#  Rules:
+#    - POSIX sh only, no bashisms or zshisms
+#    - No subprocesses unless absolutely required
+#    - Fast: this runs before your shell prompt appears
+# =============================================================
+
+
+# =============================================================
+#  XDG Base Directories
+#  Must come first — everything below references these.
+# =============================================================
+
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_DATA_DIRS="/usr/local/share:/usr/share:$XDG_DATA_HOME"
+export XDG_CONFIG_DIRS="/etc/xdg:$XDG_CONFIG_HOME"
+
+
+# =============================================================
+#  PATH
+# =============================================================
+
+# User binaries
+# export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.local/bin/statusbar:$PATH"
+
+# Go — only added if GOPATH/bin exists
+export GOPATH="$XDG_DATA_HOME/go"
+export GOMODCACHE="$XDG_CACHE_HOME/go/mod"
+[ -d "$GOPATH/bin" ] && export PATH="$GOPATH/bin:$PATH"
+
+# Cargo / Rust
+export CARGO_HOME="$XDG_DATA_HOME/cargo"
+[ -d "$CARGO_HOME/bin" ] && export PATH="$CARGO_HOME/bin:$PATH"
+
+
+# =============================================================
+#  Default Programs
+# =============================================================
+
+export EDITOR="nvim"
+export VISUAL="nvim"
+export TERMINAL="st"
+export BROWSER="librewolf"
+export MENU="dmenu"          # used by menu dispatcher: rofi | dmenu | fzfmenu
+
+
+# =============================================================
+#  X11
+# =============================================================
+
+export XINITRC="$XDG_CONFIG_HOME/x11/xinitrc"
+export XSERVERRC="$XDG_CONFIG_HOME/x11/xserverrc"
+# export XAUTHORITY="$XDG_RUNTIME_DIR/Xauthority"  # uncomment only if no DM
+
+
+# =============================================================
+#  Shell
+# =============================================================
+
+export INPUTRC="$XDG_CONFIG_HOME/shell/inputrc"
+export HISTFILE="$XDG_STATE_HOME/bash/history"
+export COLORTERM="truecolor"
+
+
+# =============================================================
+#  Pager (less)
+# =============================================================
+
+export LESS="RF"
+# Colorized man pages via ANSI escapes
+export LESS_TERMCAP_mb="$(printf '\033[1;31m')"     # begin blink
+export LESS_TERMCAP_md="$(printf '\033[1;36m')"     # begin bold
+export LESS_TERMCAP_me="$(printf '\033[0m')"        # reset bold/blink
+export LESS_TERMCAP_so="$(printf '\033[01;44;33m')" # begin standout
+export LESS_TERMCAP_se="$(printf '\033[0m')"        # end standout
+export LESS_TERMCAP_us="$(printf '\033[1;32m')"     # begin underline
+export LESS_TERMCAP_ue="$(printf '\033[0m')"        # end underline
+# bat as LESSOPEN pipe if available, highlight as fallback
+# Note: we check at runtime in the shell, not here, to avoid a subprocess on every login.
+# LESSOPEN is set in bashrc/zshrc after the shell is confirmed interactive.
+
+
+# =============================================================
+#  fzf
+# =============================================================
+
+export FZF_DEFAULT_OPTS="\
+--layout=reverse \
+--height=40% \
+--border=none \
+--pointer='▶' \
+--prompt='  ' \
+--color=dark,\
+hl:red:regular,\
+fg+:white:regular,\
+hl+:red:regular:reverse,\
+prompt:red:bold,\
+pointer:red:bold,\
+info:gray:regular"
+
+
+# =============================================================
+#  GPG / SSH
+#  gpgconf call is intentional here — it must run once at login
+#  to point SSH_AUTH_SOCK at the gpg-agent socket.
+# =============================================================
+
+export GPG_TTY="$(tty)"
+export SSH_AGENT_PID=""
+export SSH_AUTH_SOCK="$(gpgconf --list-dirs agent-ssh-socket 2>/dev/null)"
+
+
+# =============================================================
+#  Security / Passwords
+# =============================================================
+
+export SUDO_ASKPASS="$HOME/.local/bin/dmenupass"
+export PASSWORD_STORE_DIR="$XDG_DATA_HOME/password-store"
+
+
+# =============================================================
+#  Toolkit / Desktop Integration
+# =============================================================
+
+# Trick xdg-desktop-portal into using the GTK backend on dwm.
+# Required for file pickers, portals, and some GTK/Qt apps.
+export XDG_CURRENT_DESKTOP="GNOME"
+export XDG_SESSION_DESKTOP="GNOME"
+export GTK_USE_PORTAL=0
+export GTK_RC_FILES="$XDG_CONFIG_HOME/gtk-1.0/gtkrc"
+export GTK2_RC_FILES="$XDG_CONFIG_HOME/gtk-2.0/gtkrc"
+export QT_QPA_PLATFORMTHEME="gtk2"
+
+# Firefox smooth scrolling on xinput2
+export MOZ_USE_XINPUT2=1
+
+# Java non-reparenting fix for dwm
+export _JAVA_AWT_WM_NONREPARENTING=1
+export AWT_TOOLKIT="MToolkit wmname LG3D"
+
+# Calibre dark mode
+export CALIBRE_USE_SYSTEM_THEME=0
+export CALIBRE_USE_DARK_PALETTE=1
+
+
+# =============================================================
+#  Tool XDG Paths
+#  Keeps ~ clean by redirecting tool state/config into XDG dirs.
+# =============================================================
+
+export INPUTRC="$XDG_CONFIG_HOME/shell/inputrc"
+export WGETRC="$XDG_CONFIG_HOME/wget/wgetrc"
+export NPM_CONFIG_USERCONFIG="$XDG_CONFIG_HOME/npm/npmrc"
+export NOTMUCH_CONFIG="$XDG_CONFIG_HOME/notmuch-config"
+export TASKRC="$XDG_CONFIG_HOME/task/taskrc"
+export TASKDATA="$XDG_DATA_HOME/task"
+
+
+# =============================================================
+#  Prayer Times
+# =============================================================
+
+export PRAYER_CITY="Agadir"
+export PRAYER_COUNTRY="Morocco"
+export PRAYER_METHOD=1          # 1=Egyptian | 2=ISNA | 4=Makkah
+
+
+# =============================================================
+#  Startup
+# =============================================================
+
+# Regenerate shortcut files if missing (runs in background, non-blocking)
+[ ! -f "$XDG_CONFIG_HOME/shell/shortcutrc" ] && \
+    setsid -f shortcuts >/dev/null 2>&1
+
+# Auto-start X on tty1 — single clean guard
+if [ "$(tty)" = "/dev/tty1" ] \
+    && ! pidof -s Xorg >/dev/null 2>&1 \
+    && [ ! -f "$HOME/.nostartx" ]; then
+    exec startx "$XINITRC" -- "$XSERVERRC" vt1
+fi

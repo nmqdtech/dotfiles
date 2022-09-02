@@ -1,0 +1,97 @@
+#!/bin/sh
+# =============================================================
+#  emoji — pick an emoji or Font Awesome icon
+#
+#  Usage:
+#    emoji           pick from all sources, copy to clipboard
+#    emoji -t        type chosen char at cursor (xdotool)
+#    emoji -s emoji  pick only from emoji file
+#    emoji -s fa     pick only from font-awesome file
+#
+#  Files (in $CHARS_DIR):
+#    emoji        — format: <emoji> description
+#    font-awesome — format: <glyph>  name; hexcode
+#
+#  Launcher: $MENU
+# =============================================================
+
+. menu || { printf 'emoji: menu not found\n' >&2; exit 1; }
+
+CHARS_DIR="${CHARS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/chars}"
+EMOJI_FILE="$CHARS_DIR/emoji"
+FA_FILE="$CHARS_DIR/font-awesome"
+
+_type=0
+_source=""
+
+# ── Flags ─────────────────────────────────────────────────────
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -t) _type=1;       shift ;;
+        -s) _source="$2";  shift 2 ;;
+        *)  shift ;;
+    esac
+done
+
+# ── Source selection ──────────────────────────────────────────
+# If no source given and both files exist, let user pick
+
+_has_emoji="$([ -f "$EMOJI_FILE" ] && echo 1 || echo 0)"
+_has_fa="$(   [ -f "$FA_FILE"    ] && echo 1 || echo 0)"
+
+if [ -z "$_source" ]; then
+    if [ "$_has_emoji" -eq 1 ] && [ "$_has_fa" -eq 1 ]; then
+        # Both available — ask which
+        _source="$(printf ' Emoji\n Font Awesome\n All' \
+            | menu -p "Source:" -l 3)" || exit 0
+        [ -z "$_source" ] && exit 0
+    elif [ "$_has_emoji" -eq 1 ]; then
+        _source=" Emoji"
+    elif [ "$_has_fa" -eq 1 ]; then
+        _source=" Font Awesome"
+    else
+        printf 'emoji: no files found in %s\n' "$CHARS_DIR" >&2
+        exit 1
+    fi
+fi
+
+# ── Build candidate list ──────────────────────────────────────
+
+case "$_source" in
+    *Emoji|emoji|e)
+        [ -f "$EMOJI_FILE" ] || { printf 'emoji: not found: %s\n' "$EMOJI_FILE" >&2; exit 1; }
+        _list="$(cat "$EMOJI_FILE")"
+        ;;
+    *"Font Awesome"|fa|f)
+        [ -f "$FA_FILE" ] || { printf 'emoji: not found: %s\n' "$FA_FILE" >&2; exit 1; }
+        _list="$(cat "$FA_FILE")"
+        ;;
+    *All|all|a)
+        [ -f "$EMOJI_FILE" ] && _emoji="$(cat "$EMOJI_FILE")" || _emoji=""
+        [ -f "$FA_FILE"    ] && _fa="$(   cat "$FA_FILE")"    || _fa=""
+        _list="$(printf '%s\n%s' "$_emoji" "$_fa")"
+        ;;
+    *)
+        printf 'emoji: unknown source: %s\n' "$_source" >&2; exit 1
+        ;;
+esac
+
+# ── Show picker ───────────────────────────────────────────────
+
+chosen="$(printf '%s\n' "$_list" | menu -p ":" -l 20)" || exit 0
+[ -z "$chosen" ] && exit 0
+
+# ── Extract the glyph (always the first character/field) ──────
+# Both formats start with the char: emoji files have "😀 desc"
+# font-awesome has "<glyph>  name; hex"
+# awk gets the first space-delimited token which is the icon char.
+char="$(printf '%s' "$chosen" | awk '{print $1}')"
+
+# ── Output ────────────────────────────────────────────────────
+
+if [ "$_type" -eq 1 ]; then
+    xdotool type "$char"
+else
+    printf '%s' "$char" | xclip -selection clipboard
+    notify-send -a emoji "Copied" "$chosen" 2>/dev/null || true
+fi

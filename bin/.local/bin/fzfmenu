@@ -1,0 +1,67 @@
+#!/bin/sh
+# =============================================================
+#  fzfmenu — fzf in a floating st window, drop-in dmenu shim
+#
+#  Usage:
+#    printf 'foo\nbar\nbaz\n' | fzfmenu -p "Pick:"
+#    ls | fzfmenu --prompt "File > " --height 40%
+#
+#  All arguments are passed directly to fzf.
+#
+#  Config (env vars):
+#    FZFMENU_TERM   terminal emulator  (default: st)
+#    FZFMENU_GEOM   st geometry flag   (default: 80x20)
+#    FZFMENU_OPTS   extra fzf options
+# =============================================================
+
+term="${FZFMENU_TERM:-st}"
+geom="${FZFMENU_GEOM:-80x20}"
+
+export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:-\
+--layout=reverse \
+--border=none \
+--no-sort \
+--prompt='  ' \
+--pointer='▶' \
+--color=dark,\
+hl:red:regular,\
+fg+:white:regular,\
+hl+:red:regular:reverse,\
+query:white:regular,\
+info:gray:regular,\
+prompt:red:bold,\
+pointer:red:bold}"
+
+command -v fzf     >/dev/null 2>&1 || { printf 'fzfmenu: fzf not found\n'        >&2; exit 127; }
+command -v "$term" >/dev/null 2>&1 || { printf 'fzfmenu: %s not found\n' "$term" >&2; exit 127; }
+
+# ── Temp dir ─────────────────────────────────────────────────
+tmpdir="$(mktemp -d)" || { printf 'fzfmenu: mktemp failed\n' >&2; exit 1; }
+datafile="$tmpdir/input"
+outfile="$tmpdir/output"
+trap 'rm -rf "$tmpdir"' EXIT INT TERM
+
+# ── Read ALL stdin into a file before spawning st ─────────────
+# Critical: do this first so there is no race between the caller
+# closing its pipe and st/fzf opening the read end.
+cat > "$datafile"
+
+# ── Quote args safely for sh -c passthrough ──────────────────
+_quote_args() {
+    for _a; do
+        printf " '%s'" "$(printf '%s' "$_a" | sed "s/'/'\\\\''/g")"
+    done
+}
+fzf_args="$(_quote_args "$@") ${FZFMENU_OPTS:-}"
+
+# ── Launch st — fzf reads data file, writes selection to outfile
+"$term" \
+    -g "$geom" \
+    -c fzfmenu \
+    -n fzfmenu \
+    -e sh -c "fzf ${fzf_args} <'$datafile' >'$outfile'" \
+    2>/dev/null
+
+# st is synchronous here (no &) — we wait for the window to close,
+# then read whatever fzf wrote to outfile.
+cat "$outfile" 2>/dev/null

@@ -1,0 +1,53 @@
+########################################
+# AdGuard Home Full Blocklist
+# Consolidated from multiple public sources
+# Maintained for personal/self-hosted use
+# Recommended: monitor logs and whitelist as needed
+########################################
+
+# ------------------------------
+# AdGuard Team Official Filters
+# ------------------------------
+https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+
+# ------------------------------
+# StevenBlack Hosts (Unified & Alternates)
+# ------------------------------
+# Unified hosts (ads, trackers, malware)
+https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+# Optional category-specific lists
+# Uncomment the ones you want
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling-only/hosts
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn-only/hosts
+# Aggressive social media blocking
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-only/hosts
+
+# ------------------------------
+# DandelionSprout Anti-Malware
+# ------------------------------
+https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Alternate%20versions%20Anti-Malware%20List/AntiMalwareAdGuardHome.txt
+
+# ------------------------------
+# Hagezi DNS Blocklists (Adblock & IP-based)
+# ------------------------------
+# Generic adblock / malware / trackers
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/ips/tif.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/ultimate.txt
+
+# DNS / service-related
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/dyndns.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/hoster.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/urlshortener.txt
+
+# Specific categories
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/spam-tlds.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/anti.piracy.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/gambling.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/nsfw.txt
+
+# Aggressive / optional
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/doh-vpn-proxy-bypass.txt
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/nosafesearch.txt

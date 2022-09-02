@@ -1,0 +1,213 @@
+#!/bin/sh
+# =============================================================
+#  prayer — Islamic prayer times CLI
+#
+#  API: aladhan.com
+#
+#  Usage:
+#    prayer -n        next prayer + ETA
+#    prayer -a        all prayer times today
+#    prayer -s        status bar string (for dwm/slstatus)
+#    prayer -u        force refresh from API
+#    prayer -h        this help
+#
+#  Config (env vars):
+#    PRAYER_CITY      (default: Agadir)
+#    PRAYER_COUNTRY   (default: Morocco)
+#    PRAYER_METHOD    aladhan method number (default: 1 — Egyptian)
+#    PRAYER_ICON      prefix icon (default: 󱠧)
+#    PRAYER_DATA      cache file path
+# =============================================================
+
+# ── Config ────────────────────────────────────────────────────
+city="${PRAYER_CITY:-Agadir}"
+country="${PRAYER_COUNTRY:-Morocco}"
+method="${PRAYER_METHOD:-1}"
+icon="${PRAYER_ICON:-󱠧}"
+datafile="${PRAYER_DATA:-${XDG_DATA_HOME:-$HOME/.local/share}/prayer}"
+
+api="https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}&method=${method}"
+
+# Prayer names we care about (in order)
+NAMES="Fajr Dhuhr Asr Maghrib Isha"
+
+# ── Helpers ───────────────────────────────────────────────────
+
+die() { printf 'prayer: %s\n' "$*" >&2; exit 1; }
+
+_fetch() {
+    command -v curl >/dev/null 2>&1 || die "curl not found"
+    command -v jq   >/dev/null 2>&1 || die "jq not found"
+
+    tmp="$(mktemp)" || die "mktemp failed"
+    if curl -sf --max-time 10 "$api" -o "$tmp"; then
+        # Validate response has expected structure
+        jq -e '.data.timings' "$tmp" >/dev/null 2>&1 \
+            || die "Unexpected API response — check city/country/method"
+        mkdir -p "$(dirname "$datafile")"
+        mv "$tmp" "$datafile"
+    else
+        rm -f "$tmp"
+        die "API request failed (no network?)"
+    fi
+}
+
+# Refresh data if cache is from a previous day or missing
+_maybe_refresh() {
+    today="$(date '+%Y-%m-%d')"
+    cache_date="$(stat -c %y "$datafile" 2>/dev/null | cut -d' ' -f1)"
+    [ "$cache_date" = "$today" ] && [ -s "$datafile" ] && return
+    _fetch
+}
+
+# Get a prayer time string "HH:MM" from cache
+_time_of() {
+    jq -r ".data.timings.${1}" "$datafile" 2>/dev/null | cut -d' ' -f1
+}
+
+# Convert "HH:MM" to seconds since midnight
+_to_secs() {
+    h="${1%%:*}"; m="${1##*:}"
+    printf '%d\n' "$(( h * 3600 + m * 60 ))"
+}
+
+# Seconds since midnight (now)
+_now_secs() {
+    date '+%-H * 3600 + %-M * 60 + %-S' | bc 2>/dev/null \
+    || printf '%d\n' "$(( $(date +%H) * 3600 + $(date +%M) * 60 + $(date +%S) ))"
+}
+
+# Format a duration in seconds as "Xh Ym" or "Ym" (negative → past)
+_fmt_duration() {
+    _secs="$1"
+    _sign=""
+    if [ "$_secs" -lt 0 ]; then
+        _sign="-"
+        _secs=$(( -_secs ))
+    fi
+    _h=$(( _secs / 3600 ))
+    _m=$(( (_secs % 3600) / 60 ))
+    if [ "$_h" -gt 0 ]; then
+        printf '%s%dh %02dm\n' "$_sign" "$_h" "$_m"
+    else
+        printf '%s%dm\n' "$_sign" "$_m"
+    fi
+}
+
+# ── Output functions ──────────────────────────────────────────
+
+_print_all() {
+    now="$(_now_secs)"
+    printf '%-10s  %-5s  %s\n' "Prayer" "Time" "ETA"
+    printf '%-10s  %-5s  %s\n' "------" "----" "---"
+    for name in $NAMES; do
+        t="$(_time_of "$name")"
+        [ -z "$t" ] && continue
+        t_secs="$(_to_secs "$t")"
+        diff=$(( t_secs - now ))
+        marker=" "
+        # Mark past prayers
+        [ "$diff" -lt 0 ] && marker="✓"
+        printf '%s %-9s  %-5s  %s\n' "$marker" "$name" "$t" "$(_fmt_duration "$diff")"
+    done
+}
+
+_next_prayer() {
+    now="$(_now_secs)"
+    best_name=""
+    best_diff=""
+    best_time=""
+
+    for name in $NAMES; do
+        t="$(_time_of "$name")"
+        [ -z "$t" ] && continue
+        t_secs="$(_to_secs "$t")"
+        diff=$(( t_secs - now ))
+        # Only future prayers
+        if [ "$diff" -gt 0 ]; then
+            if [ -z "$best_diff" ] || [ "$diff" -lt "$best_diff" ]; then
+                best_diff="$diff"
+                best_name="$name"
+                best_time="$t"
+            fi
+        fi
+    done
+
+    if [ -z "$best_name" ]; then
+        # All prayers passed — next is Fajr tomorrow
+        fajr="$(_time_of "Fajr")"
+        fajr_secs="$(_to_secs "$fajr")"
+        diff=$(( 86400 - now + fajr_secs ))
+        printf 'Next: Fajr (tomorrow) at %s in %s\n' "$fajr" "$(_fmt_duration "$diff")"
+    else
+        printf 'Next: %s at %s in %s\n' "$best_name" "$best_time" "$(_fmt_duration "$best_diff")"
+    fi
+}
+
+# Compact status bar output: "󱠧 Asr 14:32 (2h 05m)"
+_status_bar() {
+    now="$(_now_secs)"
+    best_name=""
+    best_diff=""
+    best_time=""
+
+    for name in $NAMES; do
+        t="$(_time_of "$name")"
+        [ -z "$t" ] && continue
+        t_secs="$(_to_secs "$t")"
+        diff=$(( t_secs - now ))
+        if [ "$diff" -gt 0 ]; then
+            if [ -z "$best_diff" ] || [ "$diff" -lt "$best_diff" ]; then
+                best_diff="$diff"
+                best_name="$name"
+                best_time="$t"
+            fi
+        fi
+    done
+
+    if [ -z "$best_name" ]; then
+        fajr="$(_time_of "Fajr")"
+        fajr_secs="$(_to_secs "$fajr")"
+        diff=$(( 86400 - now + fajr_secs ))
+        printf '%s Fajr ↑ %s\n' "$icon" "$(_fmt_duration "$diff")"
+    else
+        printf '%s %s %s (%s)\n' "$icon" "$best_name" "$best_time" "$(_fmt_duration "$best_diff")"
+    fi
+}
+
+_usage() {
+    cat <<EOF
+Usage: ${0##*/} [option]
+
+Options:
+  -n    Next prayer name, time, and ETA
+  -a    All prayer times with ETA
+  -s    Status bar string (compact, for slstatus/xsetroot)
+  -u    Force refresh from API
+  -h    Show this help
+
+Environment:
+  PRAYER_CITY      City name         (current: $city)
+  PRAYER_COUNTRY   Country name      (current: $country)
+  PRAYER_METHOD    Aladhan method    (current: $method)
+  PRAYER_ICON      Status bar icon   (current: $icon)
+  PRAYER_DATA      Cache file path   (current: $datafile)
+
+Aladhan calculation methods:
+  1=Egyptian  2=ISNA  3=MWL  4=Makkah  5=Karachi
+  12=Gulf  13=Kuwait  14=Qatar  15=Singapore  99=Custom
+EOF
+}
+
+# ── Main ──────────────────────────────────────────────────────
+
+[ $# -eq 0 ] && { _usage; exit 0; }
+
+case "$1" in
+    -n) _maybe_refresh; _next_prayer ;;
+    -a) _maybe_refresh; _print_all   ;;
+    -s) _maybe_refresh; _status_bar  ;;
+    -u) _fetch; printf 'Prayer times updated for %s, %s\n' "$city" "$country" ;;
+    -h) _usage ;;
+    *)  _usage; exit 1 ;;
+esac

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if command -v picom >/dev/null 2>&1 ; then
+    if pgrep -x "picom" > /dev/null
+    then
+        pkill picom
+    else
+        # picom --experimental-backends
+        picom
+    fi
+    exit 0
+fi
+

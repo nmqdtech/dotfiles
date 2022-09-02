@@ -1,0 +1,16 @@
+#!/bin/bash
+
+
+url=$1
+
+error(){
+    echo "Usage: $0 <url>"
+    echo "Example : $0 'https://www.youtube.com/watch?v=mJ6rXFDl2Vo'"
+    exit 1
+}
+
+[[ $url == *"http"* ]] || url="$(xclip -o 2>/dev/null)"
+[[ $url == *"http"* ]] || read -p "Please Enter a URL: " url
+[[ $url == *"http"* ]] || error
+
+yt-dlp $url

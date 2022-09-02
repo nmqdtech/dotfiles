@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# Disk usage module for dwmblocks
+
+location=${1:-/}
+
+[ -d "$location" ] || exit 1
+
+case "$location" in
+    /home*) icon="🏠" ;;
+    /mnt*|/media*) icon="💾" ;;
+    *) icon="🖴" ;;
+esac
+
+case "$BLOCK_BUTTON" in
+    1)
+        notify-send "💽 Disk usage" \
+            "$(df -h "$location" | awk 'NR==2 {print "Used: " $3 " / " $2 "\nFree: " $4 "\nMounted on: " $6}')"
+        ;;
+    3)
+        notify-send "💽 Disk module" \
+            "Shows disk usage for:
+$location
+
+Left click → details"
+        ;;
+    6)
+        command -v "$EDITOR" >/dev/null &&
+            setsid -f "$TERMINAL" -e "$EDITOR" "$0"
+        ;;
+esac
+
+read -r used size <<EOF
+$(df -h --output=used,size "$location" | awk 'NR==2')
+EOF
+
+printf " ^c#88c0d0^%s^d^ %s/%s\n" "$icon" "$used" "$size"

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+choice=$(echo "onescreen\ndualscreen" | dmenu -i -c -l 5 -p "Choose a Layout:")
+
+case $choice in
+    # onescreen) xrandr --output LVDS1 --mode 1366x768 ;;
+    onescreen) xrandr --output DP2 --off ;;
+    dualscreen) xrandr --output DP2 --mode 1920x1080 --left-of LVDS1 --auto ;;
+    "") exit ;;
+esac
+
+setbg
+remaps

@@ -1,0 +1,76 @@
+#!/bin/sh
+
+# Void Linux updates block for dwmblocks
+# Uses xbps + doas
+# Features:
+# - colored update count
+# - kernel update detection
+# - async upgrades
+# - notifications
+# - no dwmblocks freezing
+# - click actions
+
+SIGNAL=4
+
+get_updates() {
+    xbps-install -Mun 2>/dev/null
+}
+
+updates="$(get_updates)"
+count="$(printf "%s\n" "$updates" | sed '/^$/d' | wc -l)"
+
+# Detect kernel-related updates
+kernel_count="$(printf "%s\n" "$updates" | grep -Ei 'linux|kernel' | wc -l)"
+
+case "$BLOCK_BUTTON" in
+    1)
+        # Upgrade in terminal asynchronously
+        setsid -f sh -c "
+            doas xbps-install -Syu >/tmp/xbps-update.log 2>&1 &&
+	    notify-send '󰏖 System updated' &&
+            pkill -RTMIN+$SIGNAL dwmblocks
+        "
+        ;;
+    2)
+        if [ "$count" -eq 0 ]; then
+            notify-send "📦 Packages" "System fully updated"
+        else
+            notify-send "📦 Upgradeable packages" "$updates"
+        fi
+        ;;
+    3)
+        notify-send "🎁 Upgrade module" \
+"Left click  → Full system upgrade
+Middle click → Show upgradeable packages
+Scroll up    → Refresh module"
+        ;;
+    4|5)
+        pkill -RTMIN+$SIGNAL dwmblocks
+        ;;
+    6)
+        setsid -f "$TERMINAL" -e "$EDITOR" "$0"
+        ;;
+esac
+
+# Hide block if no updates
+[ "$count" -eq 0 ] && exit 0
+
+# Color levels
+if [ "$count" -ge 50 ]; then
+    color="#fb4934"   # red
+elif [ "$count" -ge 20 ]; then
+    color="#fe8019"   # orange
+elif [ "$count" -ge 10 ]; then
+    color="#fabd2f"   # yellow
+else
+    color="#b8bb26"   # green
+fi
+
+# Kernel warning
+if [ "$kernel_count" -gt 0 ]; then
+    icon="󰌽"
+else
+    icon="󰏖"
+fi
+
+printf "^c%s^ %s %s ^d^" "$color" "$icon" "$count"

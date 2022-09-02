@@ -1,0 +1,198 @@
+#!/bin/sh
+# =============================================================
+#  themer — X colorscheme + wallpaper switcher
+#
+#  Applies on every run:
+#    xrdb        colors into X resource database
+#    st          live reload via SIGUSR1
+#    dwm         clean restart via SIGHUP (restartsig patch)
+#    dwmblocks   status refresh via SIGRTMIN
+#    dunst       restart to pick up new xrdb colors
+#    wallpaper   random image from $WALLS_DIR/<theme>/
+#
+#  Optional (used only if installed):
+#    pywalfox    updates firefox/librewolf theme
+#                colors.json is generated directly from the xcolor
+#                file — no pywal binary required
+#
+#  Config (env vars):
+#    XCOLORS_DIR   (~/.config/x11/xcolors)
+#    XRESOURCES    (~/.config/x11/xresources)
+#    WALLS_DIR     (~/.local/share/walls)
+#    WAL_CACHE     (~/.cache/wal)
+# =============================================================
+
+. menu || { printf 'themer: menu not found in PATH\n' >&2; exit 1; }
+
+XCOLORS_DIR="${XCOLORS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/x11/xcolors}"
+XRESOURCES="${XRESOURCES:-${XDG_CONFIG_HOME:-$HOME/.config}/x11/xresources}"
+WALLS_DIR="${WALLS_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/walls}"
+WAL_CACHE="${WAL_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/wal}"
+
+notify() { notify-send -a themer "$@" 2>/dev/null || printf '%s\n' "$*" >&2; }
+die()    { notify "themer" "$*"; exit 1; }
+
+[ -d "$XCOLORS_DIR" ] || die "Theme dir not found: $XCOLORS_DIR"
+[ -f "$XRESOURCES"  ] || die "Xresources not found: $XRESOURCES"
+
+
+# =============================================================
+#  1. Pick theme
+# =============================================================
+
+selection="$(ls -1 "$XCOLORS_DIR" | menu -p "Theme:" -l 20)" || exit 0
+[ -z "$selection" ] && exit 0
+
+theme_file="$XCOLORS_DIR/$selection"
+[ -f "$theme_file" ] || die "Theme file not found: $theme_file"
+
+
+# =============================================================
+#  2. Update xresources
+# =============================================================
+
+tmp="$(mktemp)" || die "mktemp failed"
+grep -v '^#include.*xcolors' "$XRESOURCES" > "$tmp" \
+    && printf '#include "%s"\n' "$theme_file" >> "$tmp" \
+    && mv "$tmp" "$XRESOURCES" \
+    || { rm -f "$tmp"; die "Failed to update $XRESOURCES"; }
+
+xrdb -merge -I"$(dirname "$XRESOURCES")" "$XRESOURCES" \
+    || { notify "themer" "xrdb merge failed"; exit 1; }
+
+
+# =============================================================
+#  3. Reload apps
+#
+#  Everything runs in the background (&) so themer returns fast.
+#  Order: st first (instant), dwm restart, then dwmblocks after
+#  a short wait for dwm to finish re-exec-ing, then dunst.
+# =============================================================
+
+{
+    # st: live color reload, no restart needed
+    pkill -USR1 -x st 2>/dev/null || true
+
+    # dwm: clean restart via restartsig patch (SIGHUP)
+    # re-execs dwm which re-reads xrdb at startup
+    pkill -HUP -x dwm 2>/dev/null || true
+
+    # wait for dwm to finish restarting before poking dwmblocks
+    sleep 0.3
+    pkill -RTMIN -x dwmblocks 2>/dev/null || true
+
+    # dunst: must restart to pick up new xrdb colors
+    pkill -x dunst 2>/dev/null || true
+    sleep 0.2
+    dunst 2>/dev/null &
+
+} &
+
+
+# =============================================================
+#  4. pywalfox (optional)
+#
+#  We generate colors.json directly from the xcolor file instead
+#  of running wal — faster, no dependency, and works correctly
+#  with xresources-format color files which wal -f misparses.
+# =============================================================
+
+if command -v pywalfox >/dev/null 2>&1; then
+    mkdir -p "$WAL_CACHE"
+
+    # Parse *colorN, *foreground, *background from the xcolor file
+    # into POSIX shell variables: C0..C15, FG, BG, CURSOR
+    _parse() {
+        while IFS= read -r line; do
+            case "$line" in ''|'!'*) continue ;; esac
+            key="$(printf '%s' "$line" | sed -n \
+                's/^\*\?\([a-zA-Z0-9]*\):[[:space:]]*\(#[0-9a-fA-F]\{6\}\).*/\1/p' \
+                | tr '[:upper:]' '[:lower:]')"
+            val="$(printf '%s' "$line" | sed -n \
+                's/^\*\?\([a-zA-Z0-9]*\):[[:space:]]*\(#[0-9a-fA-F]\{6\}\).*/\2/p')"
+            [ -z "$key" ] || [ -z "$val" ] && continue
+            case "$key" in
+                color0)  C0="$val"  ;; color1)  C1="$val"  ;;
+                color2)  C2="$val"  ;; color3)  C3="$val"  ;;
+                color4)  C4="$val"  ;; color5)  C5="$val"  ;;
+                color6)  C6="$val"  ;; color7)  C7="$val"  ;;
+                color8)  C8="$val"  ;; color9)  C9="$val"  ;;
+                color10) C10="$val" ;; color11) C11="$val" ;;
+                color12) C12="$val" ;; color13) C13="$val" ;;
+                color14) C14="$val" ;; color15) C15="$val" ;;
+                foreground)  FG="$val"     ;;
+                background)  BG="$val"     ;;
+                cursorcolor) CURSOR="$val" ;;
+            esac
+        done < "$theme_file"
+        # fallbacks
+        CURSOR="${CURSOR:-$FG}"
+        C0="${C0:-$BG}";   C1="${C1:-#ff0000}"; C2="${C2:-#00ff00}"
+        C3="${C3:-#ffff00}";C4="${C4:-#0000ff}"; C5="${C5:-#ff00ff}"
+        C6="${C6:-#00ffff}";C7="${C7:-$FG}"
+        for i in 8 9 10 11 12 13 14 15; do
+            eval "C${i}=\"\${C${i}:-\$C$(( i - 8 ))}\""
+        done
+    }
+    _parse
+
+    # Abort if we couldn't parse the essentials
+    [ -z "$FG" ] || [ -z "$BG" ] && \
+        notify "themer" "Could not parse colors for pywalfox" \
+        || {
+        # Write colors.json in pywal's exact format
+        cat > "$WAL_CACHE/colors.json" << JSON
+{
+    "special": {
+        "background": "$BG",
+        "foreground": "$FG",
+        "cursor":     "$CURSOR"
+    },
+    "colors": {
+        "color0":  "$C0",  "color1":  "$C1",
+        "color2":  "$C2",  "color3":  "$C3",
+        "color4":  "$C4",  "color5":  "$C5",
+        "color6":  "$C6",  "color7":  "$C7",
+        "color8":  "$C8",  "color9":  "$C9",
+        "color10": "$C10", "color11": "$C11",
+        "color12": "$C12", "color13": "$C13",
+        "color14": "$C14", "color15": "$C15"
+    },
+    "wallpaper": "${XDG_DATA_HOME:-$HOME/.local/share}/bg",
+    "alpha": "100"
+}
+JSON
+        pywalfox update 2>/dev/null \
+            || notify "themer" "pywalfox update failed"
+    }
+fi
+
+
+# =============================================================
+#  5. Wallpaper
+# =============================================================
+
+walldir="$WALLS_DIR/$selection"
+
+if [ -d "$walldir" ]; then
+    img="$(find "$walldir" -maxdepth 1 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.png' -o -iname '*.webp' \) \
+        | shuf -n 1)"
+
+    if [ -n "$img" ]; then
+        ln -sf "$img" "${XDG_DATA_HOME:-$HOME/.local/share}/bg"
+        xwallpaper --zoom "$img" 2>/dev/null \
+            || feh --bg-fill "$img" 2>/dev/null \
+            || notify "themer" "No wallpaper tool found"
+    else
+        notify "themer" "No images found in $walldir"
+    fi
+fi
+
+
+# =============================================================
+#  Done
+# =============================================================
+
+notify "themer" "Theme: $selection"

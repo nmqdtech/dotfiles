@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+query=$(printf '%s' "$*" | tr ' ' '+' )
+results=~/.cache/results.txt
+# invidious="https://vid.puffyan.us/search?q=$query"
+invidious="https://yewtu.be/search?q=$query"
+# menu="| dmenu -l 10"
+# menu="fzf"
+# menu="rofi -dmenu"
+menu () {
+	dmenu -i -l 20 -p "Choose a video to play"
+	# rofi -dmenu -l 0 -p "Play video"
+	# fzf --prompt "Choose a video to play"
+}
+
+if [ -z $query ]; then
+    query="$(echo "" | dmenu -i -c -p "type to search")"
+    invidious="https://yewtu.be/search?q=$query"
+    # exit 1
+else
+# curl -s "https://vid.puffyan.us/search?q=$query" | grep -Eo "https.*www.youtube.*\"|<p dir=\"auto.*" | sed "s/<.*auto\">//g" | sed "s/<\/p>//g" | sed "s/\"$//g" | tail -n +2 > $results
+curl -s $invidious | grep -Eo "https.*www.youtube.*\"|<p dir=\"auto.*" | sed "s/<.*auto\">//g" | sed "s/<\/p>//g" | sed "s/\"$//g" | tail -n +2 > $results
+fi
+
+selection=$(cat $results | grep -v "https.*youtube.*" | menu)
+
+if [ -z "$selection" ]; then
+    exit 1
+else
+    setsid mpv $(grep -A 1 "$selection" $results | tail -n 1)
+fi
+

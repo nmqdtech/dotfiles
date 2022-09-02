@@ -1,0 +1,33 @@
+########################################
+# sb-volume
+########################################
+#!/bin/sh
+
+case "$BLOCK_BUTTON" in
+    1) setsid -f "$TERMINAL" -e pulsemixer; pkill -RTMIN+10 "${STATUSBAR:-dwmblocks}" ;;
+    2) wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
+    3) notify-send " Volume" "Left: mixer\nMiddle: mute\nScroll: volume up/down" ;;
+    4) wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%+ ;;
+    5) wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%- ;;
+    6) setsid -f "$TERMINAL" -e "$EDITOR" "$0" ;;
+esac
+
+vol_info=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null)
+[ -z "$vol_info" ] && exit 0
+
+case "$vol_info" in
+    *MUTED*) printf "^c#fb4934^  mute ^d^\n"; exit 0 ;;
+esac
+
+vol=${vol_info#Volume: }
+vol=${vol%.*}
+
+if [ "$vol" -ge 70 ]; then
+    icon=""
+elif [ "$vol" -ge 30 ]; then
+    icon=""
+else
+    icon=""
+fi
+
+printf "^c#fabd2f^ %s %s%% ^d^\n" "$icon" "$vol"

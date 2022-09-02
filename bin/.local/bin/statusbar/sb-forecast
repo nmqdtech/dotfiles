@@ -1,0 +1,21 @@
+########################################
+# sb-weather (forecast)
+########################################
+#!/bin/sh
+
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/weather.txt"
+location="${LOCATION:-Agadir}"
+
+update_weather() {
+    curl -sf "wttr.in/${location}?format=%p+%t+%f" > "$cache" 2>/dev/null
+}
+
+[ ! -f "$cache" ] && update_weather
+
+case "$BLOCK_BUTTON" in
+    2) update_weather ;;
+    3) notify-send " Weather" "Middle click: refresh weather" ;;
+    6) setsid -f "$TERMINAL" -e "$EDITOR" "$0" ;;
+esac
+
+printf "^c#83a598^ %s ^d^\n" "$(cat "$cache" 2>/dev/null)"

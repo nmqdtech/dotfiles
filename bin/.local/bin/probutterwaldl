@@ -1,0 +1,787 @@
+#!/bin/sh
+# butterwaldl v5.0
+#
+# Robust Wallhaven wallpaper browser/downloader
+#
+# Dependencies:
+#   curl
+#   jq
+#   nsxiv
+#   dmenu OR rofi
+#
+# Optional:
+#   notify-send
+#
+# Features:
+#   - Proper query handling
+#   - Correct Wallhaven API usage
+#   - Stable thumbnail downloading
+#   - Desktop/mobile auto classification
+#   - Correct NSFW/SFW classification
+#   - Smart filtering
+#   - "All" resolution/ratio support
+#   - NSFW-only support
+#   - Robust JSON handling
+#   - Invalid thumbnail cleanup
+#   - Existing wallpaper skipping
+#   - Better reliability
+
+set -eu
+
+########################################
+# CONFIG
+########################################
+
+VIEWER="${VIEWER:-nsxiv}"
+
+walldir="${XDG_PICTURES_DIR:-$HOME/Pictures}/walls"
+
+cachedir="${XDG_CACHE_HOME:-$HOME/.cache}/butterwaldl"
+
+thumbdir="$cachedir/thumbs"
+jsondir="$cachedir/json"
+
+apikey="pCzSh0yEFqG8Q8eai9A1bG7a4qIeNXoT"
+
+max_pages=4
+thumb_quality="large"
+
+mkdir -p \
+    "$walldir" \
+    "$thumbdir" \
+    "$jsondir"
+
+########################################
+# HELPERS
+########################################
+
+msg() {
+    printf '%s\n' "$1"
+
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send "butterwaldl" "$1" >/dev/null 2>&1 || true
+    fi
+}
+
+die() {
+    printf 'ERROR: %s\n' "$1" >&2
+    exit 1
+}
+
+download_file() {
+    url="$1"
+    out="$2"
+
+    if command -v aria2c >/dev/null 2>&1; then
+        aria2c -x 8 -s 8 -q -o "$(basename "$out")" -d "$(dirname "$out")" "$url"
+        return
+    fi
+
+    if command -v pv >/dev/null 2>&1; then
+        curl -sL "$url" | pv -s 1M > "$out"
+        return
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget --show-progress -q -O "$out" "$url"
+        return
+    fi
+
+    curl --progress-bar -L "$url" -o "$out"
+}
+
+depends() {
+    for x in "$@"; do
+        command -v "$x" >/dev/null 2>&1 ||
+            die "Missing dependency: $x"
+    done
+}
+
+depends curl jq "$VIEWER"
+
+########################################
+# MENU
+########################################
+
+use_rofi=0
+
+menu() {
+    prompt="$1"
+
+    if [ "$use_rofi" -eq 1 ]; then
+        rofi -dmenu -i -p "$prompt"
+    else
+        dmenu -i -p "$prompt"
+    fi
+}
+
+multimenu() {
+    prompt="$1"
+
+    if [ "$use_rofi" -eq 1 ]; then
+        rofi -dmenu -multi-select -i -p "$prompt"
+    else
+        dmenu -i -p "$prompt"
+    fi
+}
+
+csv_join() {
+    paste -sd ',' -
+}
+
+########################################
+# DEFAULTS
+########################################
+
+query=""
+sorting="relevance"
+
+purity="100"
+
+device="desktop"
+
+resolutions=""
+ratios=""
+
+interactive=1
+
+########################################
+# FLAGS
+########################################
+
+while [ $# -gt 0 ]; do
+
+    case "$1" in
+
+        --rofi)
+            use_rofi=1
+            shift
+            ;;
+
+        -q|--query)
+            query="$2"
+            interactive=0
+            shift 2
+            ;;
+
+        -s|--sorting)
+            sorting="$2"
+            interactive=0
+            shift 2
+            ;;
+
+        -p|--purity)
+            purity="$2"
+            interactive=0
+            shift 2
+            ;;
+
+        -r|--resolutions)
+            resolutions="$2"
+            interactive=0
+            shift 2
+            ;;
+
+        -a|--ratios)
+            ratios="$2"
+            interactive=0
+            shift 2
+            ;;
+
+        --desktop)
+            device="desktop"
+            interactive=0
+            shift
+            ;;
+
+        --mobile)
+            device="mobile"
+            interactive=0
+            shift
+            ;;
+
+        --both)
+            device="both"
+            interactive=0
+            shift
+            ;;
+
+        *)
+            die "Unknown flag: $1"
+            ;;
+    esac
+
+done
+
+########################################
+# INTERACTIVE MODE
+########################################
+
+if [ "$interactive" -eq 1 ]; then
+
+    device="$(
+        printf '%s\n' \
+            desktop \
+            mobile \
+            both |
+        menu "Device"
+    )"
+
+    [ -z "$device" ] && exit 0
+
+    query="$(
+        printf '' |
+        menu "Search Wallhaven"
+    )"
+
+    [ -z "$query" ] && exit 0
+
+    purity_choice="$(
+        printf '%s\n' \
+            "SFW only" \
+            "SFW + Sketchy" \
+            "NSFW included" \
+            "NSFW only" |
+        menu "Purity"
+    )"
+
+    case "$purity_choice" in
+
+        "SFW only")
+            purity="100"
+            ;;
+
+        "SFW + Sketchy")
+            purity="110"
+            ;;
+
+        "NSFW included")
+            purity="111"
+            ;;
+
+        "NSFW only")
+            purity="001"
+            ;;
+
+        *)
+            purity="100"
+            ;;
+
+    esac
+
+    sorting="$(
+        printf '%s\n' \
+            relevance \
+            random \
+            favorites \
+            views \
+            toplist \
+            date_added |
+        menu "Sorting"
+    )"
+
+    [ -z "$sorting" ] && sorting="relevance"
+
+    case "$device" in
+
+        desktop)
+
+            resolutions="$(
+                printf '%s\n' \
+                    All \
+                    1920x1080 \
+                    2560x1440 \
+                    3440x1440 \
+                    3840x2160 |
+                multimenu "Desktop resolutions"
+            )"
+
+            ratios="$(
+                printf '%s\n' \
+                    All \
+                    16x9 \
+                    16x10 \
+                    21x9 |
+                multimenu "Desktop ratios"
+            )"
+
+            default_res="1920x1080,2560x1440,3440x1440,3840x2160"
+            default_ratios="16x9,16x10,21x9"
+            ;;
+
+        mobile)
+
+            resolutions="$(
+                printf '%s\n' \
+                    All \
+                    1080x1920 \
+                    1440x2560 \
+                    2160x3840 |
+                multimenu "Mobile resolutions"
+            )"
+
+            ratios="$(
+                printf '%s\n' \
+                    All \
+                    9x16 \
+                    10x16 |
+                multimenu "Mobile ratios"
+            )"
+
+            default_res="1080x1920,1440x2560,2160x3840"
+            default_ratios="9x16,10x16"
+            ;;
+
+        both)
+
+            resolutions="$(
+                printf '%s\n' \
+                    All \
+                    1920x1080 \
+                    2560x1440 \
+                    3440x1440 \
+                    3840x2160 \
+                    1080x1920 \
+                    1440x2560 \
+                    2160x3840 |
+                multimenu "Resolutions"
+            )"
+
+            ratios="$(
+                printf '%s\n' \
+                    All \
+                    16x9 \
+                    16x10 \
+                    21x9 \
+                    9x16 \
+                    10x16 |
+                multimenu "Ratios"
+            )"
+
+            default_res=""
+            default_ratios=""
+            ;;
+
+    esac
+fi
+
+########################################
+# SMART FILTER HANDLING
+########################################
+
+if printf '%s\n' "$resolutions" | grep -qx "All"; then
+    resolutions="$default_res"
+elif [ -n "$resolutions" ]; then
+    resolutions="$(printf '%s\n' "$resolutions" | csv_join)"
+fi
+
+if printf '%s\n' "$ratios" | grep -qx "All"; then
+    ratios="$default_ratios"
+elif [ -n "$ratios" ]; then
+    ratios="$(printf '%s\n' "$ratios" | csv_join)"
+fi
+
+# Avoid over-filtering:
+# ratios are usually enough
+
+if [ -n "$ratios" ] && [ -n "$resolutions" ]; then
+    msg "Using ratios only to avoid over-filtering."
+    resolutions=""
+fi
+
+########################################
+# CLEAN CACHE
+########################################
+
+rm -rf "$thumbdir"/*
+rm -rf "$jsondir"/*
+
+########################################
+# FETCH API DATA
+########################################
+
+msg "Fetching wallpapers..."
+
+jsonfile="$jsondir/results.json"
+
+: > "$jsonfile"
+
+for page in $(seq "$max_pages"); do
+
+    response="$(
+        curl -sS -G \
+            "https://wallhaven.cc/api/v1/search" \
+            --data-urlencode "apikey=$apikey" \
+            --data-urlencode "q=$query" \
+            --data-urlencode "page=$page" \
+            --data-urlencode "sorting=$sorting" \
+            --data-urlencode "purity=$purity" \
+            --data-urlencode "categories=111" \
+            --data-urlencode "resolutions=$resolutions" \
+            --data-urlencode "ratios=$ratios"
+    )"
+
+    echo "$response" |
+        jq '.data[]?' >> "$jsonfile"
+
+done
+
+########################################
+# VALIDATE RESULTS
+########################################
+
+[ ! -s "$jsonfile" ] &&
+    die "No wallpapers found."
+
+tmpjson="$(mktemp)"
+
+jq -s '.' "$jsonfile" > "$tmpjson"
+
+mv "$tmpjson" "$jsonfile"
+
+count="$(jq 'length' "$jsonfile")"
+
+[ "$count" -eq 0 ] &&
+    die "No wallpapers found."
+
+msg "Found $count wallpapers."
+
+########################################
+# DOWNLOAD THUMBNAILS
+########################################
+
+msg "Downloading thumbnails..."
+
+thumb_jobs=""
+
+while IFS='|' read -r id url; do
+
+    [ -z "$url" ] && continue
+
+    ext="${url##*.}"
+
+    outfile="$thumbdir/$id.$ext"
+
+    (
+    printf '[thumb] downloading %s\n' "$id"
+
+    curl --progress-bar -L \
+        "$url" \
+        -o "$outfile"
+    ) &
+
+    thumb_jobs="$thumb_jobs $!"
+
+done <<EOF
+$(jq -r \
+    --arg q "$thumb_quality" \
+    '.[] | "\(.id)|\((.thumbs[$q] // .thumbs.original // .path))"' \
+    "$jsonfile")
+EOF
+
+for job in $thumb_jobs; do
+    wait "$job"
+done
+
+########################################
+# CLEAN INVALID FILES
+########################################
+
+find "$thumbdir" -type f ! -size +5k -delete
+
+find "$thumbdir" -type f | grep -q . ||
+    die "No valid thumbnails downloaded."
+
+########################################
+# OPEN VIEWER
+########################################
+
+msg "Opening gallery..."
+
+selected="$(
+    "$VIEWER" \
+        -otf \
+        -z 200 \
+        "$thumbdir"
+)"
+
+[ -z "$selected" ] &&
+    exit 0
+
+########################################
+# DOWNLOAD COUNTER
+########################################
+
+total_selected="$(printf '%s\n' "$selected" | wc -l)"
+current_download=0
+
+########################################
+# SEARCH CATEGORY
+########################################
+
+search_category="SFW"
+
+case "$purity" in
+
+    100)
+        search_category="SFW"
+        ;;
+
+    110)
+        search_category="Sketchy"
+        ;;
+
+    111)
+        search_category="Mixed"
+        ;;
+
+    001)
+        search_category="NSFW"
+        ;;
+
+esac
+
+########################################
+# DOWNLOAD WALLPAPERS
+########################################
+
+msg "Downloading wallpapers..."
+
+printf '%s\n' "$selected" |
+
+while read -r img; do
+
+    [ -z "$img" ] && continue
+
+    id="$(basename "$img")"
+    id="${id%.*}"
+
+    entry="$(
+        jq \
+            --arg id "$id" \
+            -c '.[] | select(.id == $id)' \
+            "$jsonfile"
+    )"
+
+    [ -z "$entry" ] && continue
+
+    url="$(
+        printf '%s\n' "$entry" |
+        jq -r '.path'
+    )"
+
+    [ -z "$url" ] && continue
+
+    ####################################
+    # REAL DEVICE DETECTION
+    ####################################
+
+    width="$(
+        printf '%s\n' "$entry" |
+        jq -r '.dimension_x'
+    )"
+
+    height="$(
+        printf '%s\n' "$entry" |
+        jq -r '.dimension_y'
+    )"
+
+    real_device="desktop"
+
+    if [ "$height" -gt "$width" ]; then
+        real_device="mobile"
+    fi
+
+    ####################################
+    # CATEGORY DETECTION
+    ####################################
+
+    category="$search_category"
+
+    if [ "$search_category" = "Mixed" ]; then
+
+        purity_val="$(
+            printf '%s\n' "$entry" |
+            jq -r '.purity'
+        )"
+
+        case "$purity_val" in
+
+            100)
+                category="SFW"
+                ;;
+
+            110)
+                category="Sketchy"
+                ;;
+
+            *)
+                category="NSFW"
+                ;;
+
+        esac
+    fi
+
+    ####################################
+    # OUTPUT FOLDER
+    ####################################
+
+    folder="$walldir/$real_device/$category"
+
+    mkdir -p "$folder"
+
+    outfile="$folder/${url##*/}"
+
+    ####################################
+    # SKIP EXISTING
+    ####################################
+
+    if [ -f "$outfile" ]; then
+        msg "Skipping existing $(basename "$outfile")"
+        continue
+    fi
+
+    ####################################
+    # DOWNLOAD
+    ####################################
+
+    current_download=$((current_download + 1))
+
+    printf '\n[%s/%s] %s\n' \
+    "$current_download" \
+    "$total_selected" \
+    "$(basename "$outfile")"
+
+    curl --progress-bar -L \
+        "$url" \
+        -o "$outfile"
+
+done
+
+########################################
+# FINAL VIEW
+########################################
+
+msg "Download complete."
+
+########################################
+# DETECT AVAILABLE CATEGORIES
+########################################
+
+available_views=""
+
+find "$walldir" -type d -name "SFW" | grep -q . &&
+    available_views="$available_views
+SFW"
+
+find "$walldir" -type d -name "Sketchy" | grep -q . &&
+    available_views="$available_views
+Sketchy"
+
+find "$walldir" -type d -name "NSFW" | grep -q . &&
+    available_views="$available_views
+NSFW"
+
+available_views="$available_views
+All"
+
+########################################
+# SMART DEFAULT
+########################################
+
+default_view="$search_category"
+
+[ "$default_view" = "Mixed" ] &&
+    default_view="All"
+
+########################################
+# MENU
+########################################
+
+view_choice="$(
+    printf '%s\n' \
+        "$default_view" \
+        $(printf '%s\n' "$available_views" | grep -vx "$default_view") |
+    awk '!seen[$0]++' |
+    menu "View wallpapers"
+)"
+
+[ -z "$view_choice" ] &&
+    exit 0
+
+########################################
+# BUILD FILE LIST
+########################################
+
+tmpview="$(mktemp)"
+
+case "$view_choice" in
+
+    SFW)
+
+        find "$walldir" \
+            -type f \
+            \( \
+                -iname '*.jpg' -o \
+                -iname '*.jpeg' -o \
+                -iname '*.png' -o \
+                -iname '*.webp' \
+            \) \
+            | grep '/SFW/' \
+            > "$tmpview"
+        ;;
+
+    Sketchy)
+
+        find "$walldir" \
+            -type f \
+            \( \
+                -iname '*.jpg' -o \
+                -iname '*.jpeg' -o \
+                -iname '*.png' -o \
+                -iname '*.webp' \
+            \) \
+            | grep '/Sketchy/' \
+            > "$tmpview"
+        ;;
+
+    NSFW)
+
+        find "$walldir" \
+            -type f \
+            \( \
+                -iname '*.jpg' -o \
+                -iname '*.jpeg' -o \
+                -iname '*.png' -o \
+                -iname '*.webp' \
+            \) \
+            | grep '/NSFW/' \
+            > "$tmpview"
+        ;;
+
+    All)
+
+        find "$walldir" \
+            -type f \
+            \( \
+                -iname '*.jpg' -o \
+                -iname '*.jpeg' -o \
+                -iname '*.png' -o \
+                -iname '*.webp' \
+            \) \
+            > "$tmpview"
+        ;;
+
+esac
+
+########################################
+# OPEN VIEWER SAFELY
+########################################
+
+[ ! -s "$tmpview" ] &&
+    die "No wallpapers found for selected view."
+
+tr '\n' '\0' < "$tmpview" |
+    xargs -0 "$VIEWER"
+
+rm -f "$tmpview"

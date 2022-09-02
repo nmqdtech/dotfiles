@@ -1,0 +1,39 @@
+########################################
+# sb-internet
+########################################
+#!/bin/sh
+
+case "$BLOCK_BUTTON" in
+    1) "$TERMINAL" -e nmtui; pkill -RTMIN+4 dwmblocks ;;
+    3) notify-send " Network" "Left click: nmtui\nShows Wi-Fi, Ethernet and VPN status" ;;
+    6) setsid -f "$TERMINAL" -e "$EDITOR" "$0" ;;
+esac
+
+wifi_iface=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2; exit}')
+
+if [ -n "$wifi_iface" ] && [ -f "/sys/class/net/$wifi_iface/operstate" ]; then
+    state=$(cat "/sys/class/net/$wifi_iface/operstate")
+    if [ "$state" = "up" ]; then
+        quality=$(awk -v iface="$wifi_iface" '$1 ~ iface":" {printf "%d", ($3*100/70)}' /proc/net/wireless)
+        wifi=" ${quality:-0}%"
+    else
+        wifi="󰖪"
+    fi
+else
+    wifi="󰖪"
+fi
+
+if ip route | grep -q '^default.*en'; then
+    eth=" "
+else
+    eth=""
+fi
+
+if ip link show | grep -q 'tun0'; then
+    vpn=" "
+else
+    vpn=""
+fi
+
+printf "%s%s%s\n" "$wifi" "$eth" "$vpn"
+

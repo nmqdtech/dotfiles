@@ -1,0 +1,96 @@
+# =============================================================
+#  ~/.config/mailcap
+#
+#  Used by tg (and mutt, neomutt, etc.) to decide how to open
+#  files by MIME type. tg reads this when you press 'l' on a
+#  downloaded file in the message view.
+#
+#  Format: type/subtype; command %s [; flags]
+#    %s    replaced with the file path
+#    test= run this cmd first; only use entry if it exits 0
+#    needsterminal  command needs a terminal (tg runs in one)
+#    copiousoutput  output is paged (use for text viewers)
+# =============================================================
+
+
+# =============================================================
+#  Video
+# =============================================================
+
+video/*;        mpv --quiet %s
+
+
+# =============================================================
+#  Audio
+# =============================================================
+
+# Voice notes (ogg/opus from Telegram)
+audio/ogg;      mpv --quiet --speed=1.33 %s
+audio/opus;     mpv --quiet --speed=1.33 %s
+
+# Music
+audio/mpeg;     mpv --quiet --no-video %s
+audio/flac;     mpv --quiet --no-video %s
+audio/mp4;      mpv --quiet --no-video %s
+audio/*;        mpv --quiet --no-video %s
+
+
+# =============================================================
+#  Images
+# =============================================================
+
+# Stickers and animated stickers (WebP/TGS)
+image/webp;     nsxiv %s
+image/gif;      nsxiv -a %s
+
+# Everything else
+image/*;        nsxiv %s
+
+
+# =============================================================
+#  PDF / Documents
+# =============================================================
+
+application/pdf;                    zathura %s
+
+# Office documents — open with libreoffice if installed
+application/vnd.openxmlformats-officedocument.wordprocessingml.document; \
+                                    setsid -f libreoffice %s
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; \
+                                    setsid -f libreoffice %s
+application/vnd.openxmlformats-officedocument.presentationml.presentation; \
+                                    setsid -f libreoffice %s
+application/msword;                 setsid -f libreoffice %s
+
+
+# =============================================================
+#  Archives
+# =============================================================
+
+# List contents — copiousoutput pipes through pager
+application/zip;        ouch list %s; copiousoutput
+application/x-tar;      ouch list %s; copiousoutput
+application/gzip;       ouch list %s; copiousoutput
+application/x-bzip2;    ouch list %s; copiousoutput
+application/x-xz;       ouch list %s; copiousoutput
+application/x-7z-compressed; ouch list %s; copiousoutput
+application/vnd.rar;    ouch list %s; copiousoutput
+application/zstd;       ouch list %s; copiousoutput
+
+
+# =============================================================
+#  Text
+# =============================================================
+
+text/html;      bat --style=plain --language=html %s; needsterminal; copiousoutput
+text/plain;     bat --style=plain %s; needsterminal; copiousoutput
+text/*;         bat --style=plain %s; needsterminal; copiousoutput
+
+
+# =============================================================
+#  Fallback — xdg-open handles everything else
+#  (epub, unknown binary formats, etc.)
+# =============================================================
+
+application/epub+zip;   setsid -f zathura %s
+application/*;          setsid -f xdg-open %s

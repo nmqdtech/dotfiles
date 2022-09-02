@@ -1,0 +1,50 @@
+# =============================================================
+#  lfpicker — minimal lf config for themer's image picker
+#
+#  Loaded via: lf -config ~/.config/lf/lfpicker
+#
+#  w  →  write current file path to $LF_PICK_FILE and quit
+#         (only works on image files)
+#  q  →  quit without selecting (cancel)
+#
+#  Inherits previewer/cleaner from main lfrc for sixel preview.
+#  Shell options are permissive — no -e/-u that would cause
+#  exit status 2 on benign non-zero commands.
+# =============================================================
+
+# Permissive shell — no strict mode that causes exit status 2
+set shell sh
+set shellopts ''
+set ifs "\n"
+
+# Keep preview working
+set preview  true
+set previewer ~/.config/lf/scope.sh
+set cleaner   ~/.config/lf/cleaner.sh
+set icons true
+set drawbox true
+set ratios 1:2:3
+
+# Navigation — keep it simple
+map h updir
+map l open
+map j down
+map k up
+map <enter> open
+map q quit
+
+# w — set as wallpaper and quit
+# Checks mime type so it only works on images.
+# Writes path to $LF_PICK_FILE which themer reads.
+map w ${{
+    mime="$(file --mime-type -Lb "$f" 2>/dev/null || true)"
+    case "$mime" in
+        image/*)
+            printf '%s' "$f" > "$LF_PICK_FILE"
+            lf -remote "send $id quit"
+            ;;
+        *)
+            lf -remote "send $id echo 'not an image'"
+            ;;
+    esac
+}}

@@ -1,0 +1,144 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/shell/aliases
+#
+#  Sourced by both bashrc and zshrc.
+#  POSIX sh compatible — no bashisms.
+# =============================================================
+
+
+# =============================================================
+#  Core Utils
+# =============================================================
+
+alias grep='grep --color=auto'
+alias diff='diff --color=auto'
+alias cp='cp -iv'
+alias mv='mv -iv'
+alias rm='rm -vI'
+alias mkd='mkdir -pv'
+alias cls='printf "\033c"'
+
+
+# =============================================================
+#  ls / eza
+# =============================================================
+
+if command -v eza >/dev/null 2>&1; then
+    alias ls='eza --group-directories-first --icons --color=auto'
+    alias la='eza --group-directories-first --icons --color=auto -a'
+    alias ll='eza --group-directories-first --icons --color=auto -la'
+    alias lt='eza --group-directories-first --icons --color=auto -T --level=2'
+    alias lT='eza --group-directories-first --icons --color=auto -T --level=3'
+else
+    alias ls='ls -hN --color=auto --group-directories-first'
+    alias la='ls -ahN --color=auto --group-directories-first'
+    alias ll='ls -lhN --color=auto --group-directories-first'
+fi
+
+
+# =============================================================
+#  Editor
+# =============================================================
+
+alias e='$EDITOR'
+alias v='$EDITOR'
+alias sv='doas $EDITOR'
+
+
+# =============================================================
+#  Git
+# =============================================================
+
+alias g='git'
+alias ga='git add'
+alias gb='git branch'
+alias gc='git commit'
+alias gcm='git commit -m'
+alias gca='git commit --amend'
+alias gco='git checkout'
+alias gd='git diff'
+alias gl='git log --graph --oneline --decorate'
+alias gp='git pull --rebase'
+alias gP='git push'
+alias gr='git reset --hard'
+alias gs='git status -sb'
+alias gst='git stash'
+
+
+# =============================================================
+#  Void Linux / xbps
+# =============================================================
+
+alias xi='doas xbps-install -S'        # install
+alias xq='doas xbps-query -Rs'         # search remote
+alias xqi='xbps-query -l'              # list installed
+alias xr='doas xbps-remove -R'         # remove + orphans
+alias xu='doas xbps-install -Su'       # full system upgrade
+
+
+# =============================================================
+#  System
+# =============================================================
+
+alias sdn='doas shutdown -h now'
+alias reb='doas reboot'
+alias suck='make clean && make && doas make install'
+alias logoutx='touch ~/.nostartx && pkill -u "$USER" X'
+
+
+# =============================================================
+#  Trash (trash-cli)
+# =============================================================
+
+alias trp='trash-put'
+alias trm='trash-remove'
+alias trl='trash-list'
+alias trr='trash-restore'
+alias tre='trash-empty'
+
+
+# =============================================================
+#  Applications
+# =============================================================
+
+alias z='zathura'
+alias lf='lf-open'     # lf with ueberzug image preview wrapper (if used)
+
+
+# =============================================================
+#  Prayer Times
+# =============================================================
+
+alias pn='prayer -n'    # next prayer + ETA
+alias pa='prayer -a'    # all prayer times
+alias pu='prayer -u'    # force update from API
+
+
+# =============================================================
+#  Network / Web
+# =============================================================
+
+alias myip='curl -s ifconfig.me && echo'
+alias http='python3 -m http.server'
+
+
+# =============================================================
+#  Misc
+# =============================================================
+
+alias path='printf "%s\n" $PATH | tr ":" "\n"'
+alias rfx='rm -f ~/.mozilla/firefox/*/.parentlock ~/.mozilla/firefox/*/lock'
+
+
+# =============================================================
+#  X11 / startx
+#  Wrapped so startx always uses the correct XINITRC/XSERVERRC.
+#  Uses a function not an alias so variable expansion happens
+#  at call time, not definition time.
+# =============================================================
+
+startx() {
+    command startx "${XINITRC:-$HOME/.config/x11/xinitrc}" \
+        -- "${XSERVERRC:-$HOME/.config/x11/xserverrc}" vt1 "$@"
+}

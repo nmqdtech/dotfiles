@@ -1,0 +1,13 @@
+#!/bin/sh
+
+ma="https://iptv-org.github.io/iptv/countries/ma.m3u"
+fr="https://iptv-org.github.io/iptv/countries/fr.m3u"
+us="https://iptv-org.github.io/iptv/countries/us.m3u"
+
+country=$(echo "MA\nUS\nFR" | dmenu -i -l 3 -p "Choose a country:")
+case $country in 
+  "MA") mpv $ma >/dev/null 2>&1 ;;
+  "US") mpv $us ;;
+  "FR") mpv $fr ;;
+esac
+# mpv $url

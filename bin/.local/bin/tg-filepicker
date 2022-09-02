@@ -1,0 +1,29 @@
+#!/bin/sh
+# =============================================================
+#  tg-filepicker — lf file picker for tg (telegram TUI client)
+#
+#  tg calls this as: tg-filepicker /tmp/some-temp-file
+#  The script must write the chosen file path to $1 and exit.
+#
+#  Uses lfpicker config (permissive shell, w key to select)
+#  so it works cleanly without fighting lfrc's strict options.
+#
+#  Install: ~/.local/bin/tg-filepicker
+#  Config:  FILE_PICKER_CMD = "tg-filepicker {file_path}"
+# =============================================================
+
+outfile="${1:-}"
+[ -z "$outfile" ] && { printf 'tg-filepicker: no output file given\n' >&2; exit 1; }
+
+# Export as LF_PICK_FILE so lfpicker's 'w' binding can write to it
+export LF_PICK_FILE="$outfile"
+
+# Start in home dir — user navigates from there
+# lf-open spawns st so sixel preview works
+lf-open \
+    -config "${XDG_CONFIG_HOME:-$HOME/.config}/lf/lfpicker" \
+    "${HOME}" \
+    2>/dev/null
+
+# If nothing was selected, write empty string so tg doesn't hang
+[ -f "$outfile" ] || printf '' > "$outfile"

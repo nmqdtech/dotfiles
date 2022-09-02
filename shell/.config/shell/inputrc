@@ -1,0 +1,83 @@
+# =============================================================
+#  ~/.config/shell/inputrc
+#
+#  GNU Readline configuration — applies to bash and all
+#  readline-aware programs (python REPL, gdb, etc).
+#  Pointed to by $INPUTRC, set in profile.
+# =============================================================
+
+$include /etc/inputrc
+
+
+# =============================================================
+#  Vi Mode
+# =============================================================
+
+set editing-mode vi
+
+$if mode=vi
+
+set keymap vi-command
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+"k":    history-search-backward
+"j":    history-search-forward
+"\C-l": clear-screen
+
+set keymap vi-insert
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+"\C-l": clear-screen
+
+$endif
+
+
+# =============================================================
+#  Cursor Shape
+#  Beam (|) in insert mode, block (█) in normal mode.
+#  linux tty uses different escape sequences.
+# =============================================================
+
+$if term=linux
+    set vi-ins-mode-string \1\e[?0c\2
+    set vi-cmd-mode-string \1\e[?8c\2
+$else
+    set vi-ins-mode-string \1\e[6 q\2
+    set vi-cmd-mode-string \1\e[2 q\2
+$endif
+
+set show-mode-in-prompt on
+
+
+# =============================================================
+#  Completion
+# =============================================================
+
+set show-all-if-ambiguous        on
+set completion-ignore-case       on
+set completion-prefix-display-length 2
+set colored-stats                on     # color filetype in completions
+set colored-completion-prefix    on     # color the common prefix
+set menu-complete-display-prefix on
+set visible-stats                on     # show file type indicator
+set mark-symlinked-directories   on
+
+
+# =============================================================
+#  Behaviour
+# =============================================================
+
+set echo-control-characters  off    # don't print ^C, ^Z etc
+set enable-bracketed-paste   on     # pasted text won't auto-execute
+set skip-completed-text      on     # don't re-insert already typed chars
+
+
+# =============================================================
+#  Key Bindings (global — outside vi mode blocks)
+# =============================================================
+
+"\e[3~":   delete-char          # Delete key
+"\e[1;5C": forward-word         # Ctrl-Right
+"\e[1;5D": backward-word        # Ctrl-Left
+"\es":     "\C-asudo \C-e"      # Alt-s: prepend sudo to line
+"\e\C-b":  "\C-e > /dev/null 2>&1 &\C-m"  # Alt-Ctrl-b: run in background

@@ -1,0 +1,19 @@
+#!/bin/sh
+# =============================================================
+#  tg-record — voice recording shim for tg
+#
+#  tg calls: tg-record "/tmp/voice-2026-05-16 23:19:05.oga"
+#  We delegate to `rec audio` which handles PipeWire cleanly,
+#  then copy the result to where tg expects it.
+#
+#  Install: ~/.local/bin/tg-record
+#  Config:  VOICE_RECORD_CMD = "tg-record {file_path}"
+# =============================================================
+
+outfile="${1:-}"
+[ -z "$outfile" ] && { printf 'tg-record: no output file given\n' >&2; exit 1; }
+
+# rec audio saves to $REC_AUDIO_DIR/<timestamp>.oga
+# We intercept by setting a custom output path via -o
+# The -o flag passes directly through to rec's pw-record logic
+rec -o "$outfile" audio

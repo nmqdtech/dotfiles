@@ -1,0 +1,92 @@
+#!/bin/sh
+# =============================================================
+#  setbg — wallpaper setter
+#
+#  Usage:
+#    setbg              → re-apply saved wallpaper (X startup)
+#    setbg <file>       → set specific image as wallpaper
+#    setbg <dir>        → pick random image from directory
+#
+#  Config (env vars):
+#    SETBG_MODE         xwallpaper mode: zoom|fill|center|tile|stretch
+#                       (default: zoom)
+#    SETBG_LINK         path to wallpaper symlink
+#                       (default: $XDG_DATA_HOME/bg)
+#    SETBG_WAL          set to 1 to force pywal even if auto-detect off
+# =============================================================
+
+# ── Config ────────────────────────────────────────────────────
+bgloc="${SETBG_LINK:-${XDG_DATA_HOME:-$HOME/.local/share}/bg}"
+mode="${SETBG_MODE:-zoom}"
+
+# ── Helpers ───────────────────────────────────────────────────
+
+notify() { notify-send -a setbg "$@" 2>/dev/null || printf '%s\n' "$*" >&2; }
+die()    { notify "🖼️ setbg" "$*"; exit 1; }
+
+_apply() {
+    _img="$(readlink -f "$bgloc")" || die "Wallpaper link missing: $bgloc"
+    [ -f "$_img" ] || die "Wallpaper file missing: $_img"
+
+    # xwallpaper
+    if command -v xwallpaper >/dev/null 2>&1; then
+        xwallpaper "--${mode}" "$_img" || die "xwallpaper failed"
+    # feh fallback
+    elif command -v feh >/dev/null 2>&1; then
+        case "$mode" in
+            zoom|fill) feh --bg-fill "$_img"   ;;
+            center)    feh --bg-center "$_img" ;;
+            tile)      feh --bg-tile "$_img"   ;;
+            stretch)   feh --bg-scale "$_img"  ;;
+            *)         feh --bg-fill "$_img"   ;;
+        esac
+    else
+        die "No wallpaper tool found (install xwallpaper or feh)"
+    fi
+
+    # pywal (optional)
+    if command -v wal >/dev/null 2>&1 && [ "${SETBG_WAL:-0}" = "1" ]; then
+        wal -n -i "$_img" \
+            -o "${XDG_CONFIG_HOME:-$HOME/.config}/wal/postrun" \
+            >/dev/null 2>&1 &
+    fi
+
+    # Signal dwm to refresh colors/status
+    pidof dwm >/dev/null && xdotool key super+F5 2>/dev/null || true
+}
+
+# ── Main ──────────────────────────────────────────────────────
+
+if [ -z "${1:-}" ]; then
+    # No argument — re-apply current saved wallpaper
+    _apply
+    exit 0
+fi
+
+trueloc="$(readlink -f "$1")" || die "Cannot resolve path: $1"
+
+mime="$(file --mime-type -b "$trueloc")" || die "Cannot determine file type"
+
+case "$mime" in
+    image/*)
+        ln -sf "$trueloc" "$bgloc" \
+            && notify "🖼️ setbg" "Wallpaper set: $(basename "$trueloc")" \
+            || die "Failed to create symlink"
+        ;;
+    inode/directory)
+        img="$(find "$trueloc" -maxdepth 2 -type f \
+            \( -iname '*.jpg' -o -iname '*.jpeg' \
+               -o -iname '*.png' -o -iname '*.webp' \
+               -o -iname '*.gif' \) \
+            | shuf -n 1)"
+        [ -n "$img" ] || die "No images found in: $trueloc"
+        ln -sf "$img" "$bgloc" \
+            && notify "🖼️ setbg" "Random wallpaper: $(basename "$img")" \
+            || die "Failed to create symlink"
+        ;;
+    *)
+        die "Not an image or directory: $1 (got $mime)"
+        ;;
+esac
+
+_apply

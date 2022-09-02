@@ -1,0 +1,13 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/x11/xserverrc
+#
+#  Passed to the X server by startx via $XSERVERRC.
+#  Disables TCP connections for security.
+# =============================================================
+
+if [ -z "$XDG_VTNR" ]; then
+    exec /usr/bin/X -nolisten tcp "$@"
+else
+    exec /usr/bin/X -nolisten tcp "$@" vt"$XDG_VTNR"
+fi

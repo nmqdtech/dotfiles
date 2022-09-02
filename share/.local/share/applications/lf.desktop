@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=lf
+Exec=/home/najib/.local/bin/lf-open %u
+Terminal=false
+MimeType=inode/directory;
+Categories=System;FileManager;

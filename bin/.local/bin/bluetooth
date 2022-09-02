@@ -1,0 +1,180 @@
+#!/bin/sh
+# =============================================================
+#  bluetooth — bluetoothctl menu interface
+#
+#  Usage:
+#    bluetooth           open device menu
+#    bluetooth --status  status bar string
+#
+#  Launcher: $MENU
+#  Depends:  bluetoothctl (bluez), rfkill
+# =============================================================
+
+. menu || { printf 'bluetooth: menu not found\n' >&2; exit 1; }
+
+DIVIDER="────────────────────"
+GOBACK="← back"
+
+# =============================================================
+#  State checks — single bluetoothctl call each, fast
+# =============================================================
+
+_bt_show=""
+_refresh_show() { _bt_show="$(bluetoothctl show)"; }
+
+_power_on()        { printf '%s' "$_bt_show" | grep -qF "Powered: yes"; }
+_scan_on()         { printf '%s' "$_bt_show" | grep -qF "Discovering: yes"; }
+_pairable_on()     { printf '%s' "$_bt_show" | grep -qF "Pairable: yes"; }
+_discoverable_on() { printf '%s' "$_bt_show" | grep -qF "Discoverable: yes"; }
+_dev_connected()   { bluetoothctl info "$1" | grep -qF "Connected: yes"; }
+_dev_paired()      { bluetoothctl info "$1" | grep -qF "Paired: yes"; }
+_dev_trusted()     { bluetoothctl info "$1" | grep -qF "Trusted: yes"; }
+
+# =============================================================
+#  Toggles
+# =============================================================
+
+_toggle_power() {
+    if _power_on; then
+        bluetoothctl power off
+    else
+        if rfkill list bluetooth | grep -qF 'blocked: yes'; then
+            rfkill unblock bluetooth
+            sleep 2
+        fi
+        bluetoothctl power on
+    fi
+}
+
+_toggle_scan() {
+    if _scan_on; then
+        bluetoothctl scan off
+    else
+        bluetoothctl scan on &
+        sleep 3
+        kill %1 2>/dev/null || true
+    fi
+}
+
+_toggle_pairable()     { _pairable_on     && bluetoothctl pairable    off || bluetoothctl pairable    on; }
+_toggle_discoverable() { _discoverable_on && bluetoothctl discoverable off || bluetoothctl discoverable on; }
+_toggle_connection()   { _dev_connected "$1" && bluetoothctl disconnect "$1" || bluetoothctl connect "$1"; }
+_toggle_paired()       { _dev_paired    "$1" && bluetoothctl remove    "$1" || bluetoothctl pair    "$1"; }
+_toggle_trusted()      { _dev_trusted   "$1" && bluetoothctl untrust   "$1" || bluetoothctl trust   "$1"; }
+
+# =============================================================
+#  Device submenu
+# =============================================================
+
+_device_menu() {
+    _mac="$1"
+    _name="$2"
+
+    while true; do
+        _conn="$(  _dev_connected "$_mac" && printf 'yes' || printf 'no')"
+        _pair="$(  _dev_paired    "$_mac" && printf 'yes' || printf 'no')"
+        _trust="$( _dev_trusted   "$_mac" && printf 'yes' || printf 'no')"
+
+        chosen="$(printf \
+            ' Connected: %s\n  Paired: %s\n Trusted: %s\n%s\n%s\nExit' \
+            "$_conn" "$_pair" "$_trust" "$DIVIDER" "$GOBACK" \
+            | menu -p "$_name:" -l 6)" || return
+
+        case "$chosen" in
+            " Connected: "*)  _toggle_connection "$_mac" ;;
+            "  Paired: "*)    _toggle_paired     "$_mac" ;;
+            " Trusted: "*)    _toggle_trusted    "$_mac" ;;
+            "$GOBACK")        return ;;
+            "Exit"|"")        exit 0 ;;
+        esac
+    done
+}
+
+# =============================================================
+#  Main menu
+# =============================================================
+
+_main_menu() {
+    while true; do
+        _refresh_show
+
+        if _power_on; then
+            _pwr_label=" Power: on"
+            _scn_label=" Scan: $(    _scan_on        && printf 'on' || printf 'off')"
+            _par_label=" Pairable: $(_pairable_on    && printf 'on' || printf 'off')"
+            _dis_label=" Discoverable: $(_discoverable_on && printf 'on' || printf 'off')"
+
+            # Build device list — one line per device
+            _devlist="$(bluetoothctl devices | awk '/^Device /{
+                mac=$2; name=substr($0, index($0,$3))
+                printf " %s %s\n", mac, name
+            }')"
+
+            # Build full menu: devices first, then controls
+            _menu_items="$(
+                printf '%s\n' "$_devlist"
+                printf '%s\n' "$DIVIDER"
+                printf '%s\n' "$_pwr_label"
+                printf '%s\n' "$_scn_label"
+                printf '%s\n' "$_par_label"
+                printf '%s\n' "$_dis_label"
+                printf 'Exit\n'
+            )"
+        else
+            _pwr_label=" Power: off"
+            _menu_items="$(printf '%s\nExit\n' "$_pwr_label")"
+        fi
+
+        chosen="$(printf '%s' "$_menu_items" | menu -p " Bluetooth:" -l 10)" || return
+
+        case "$chosen" in
+            "$_pwr_label")  _toggle_power;        ;;
+            "$_scn_label")  _toggle_scan;         ;;
+            "$_par_label")  _toggle_pairable;     ;;
+            "$_dis_label")  _toggle_discoverable; ;;
+            "$DIVIDER")     ;;
+            "Exit"|"")      return ;;
+            " "*)
+                # Device line: " <mac> <name>"
+                _mac="$(printf '%s' "$chosen" | awk '{print $2}')"
+                _name="$(printf '%s' "$chosen" | cut -d' ' -f3-)"
+                [ -n "$_mac" ] && _device_menu "$_mac" "$_name"
+                ;;
+        esac
+    done
+}
+
+# =============================================================
+#  Status bar
+# =============================================================
+
+_status() {
+    _refresh_show
+    if ! _power_on; then
+        printf ' \n'; return
+    fi
+    _connected=""
+    while IFS= read -r mac; do
+        [ -z "$mac" ] && continue
+        if _dev_connected "$mac"; then
+            _alias="$(bluetoothctl info "$mac" | awk '/Alias:/{print substr($0, index($0,$2))}')"
+            _connected="${_connected:+$_connected, }$_alias"
+        fi
+    done << EOF
+$(bluetoothctl paired-devices | awk '/^Device /{print $2}')
+EOF
+    if [ -n "$_connected" ]; then
+        printf ' %s\n' "$_connected"
+    else
+        printf ' \n'
+    fi
+}
+
+# =============================================================
+#  Main
+# =============================================================
+
+case "${1:-}" in
+    --status) _status ;;
+    *)        _main_menu ;;
+esac

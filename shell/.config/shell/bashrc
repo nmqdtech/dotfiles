@@ -1,0 +1,106 @@
+#!/bin/bash
+# =============================================================
+#  ~/.config/shell/bashrc
+#
+#  Interactive bash configuration.
+#  Sourced by ~/.bashrc for every interactive bash session.
+# =============================================================
+
+# Guard: exit immediately if not running interactively
+[[ $- != *i* ]] && return
+
+
+# =============================================================
+#  Environment Bootstrap
+#  Profile may not be loaded if bash was launched as a
+#  non-login interactive shell (e.g. opening a terminal in X).
+# =============================================================
+
+[ -z "$XDG_CONFIG_HOME" ] && \
+    [ -f "$HOME/.config/shell/profile" ] && \
+    . "$HOME/.config/shell/profile"
+
+
+# =============================================================
+#  Shared Config
+# =============================================================
+
+[ -f "$XDG_CONFIG_HOME/shell/aliases"   ] && . "$XDG_CONFIG_HOME/shell/aliases"
+[ -f "$XDG_CONFIG_HOME/shell/functions" ] && . "$XDG_CONFIG_HOME/shell/functions"
+
+
+# =============================================================
+#  History
+# =============================================================
+
+mkdir -p "$(dirname "${HISTFILE:-$HOME/.bash_history}")"
+HISTSIZE=10000
+HISTFILESIZE=20000
+HISTCONTROL=ignoreboth:erasedups
+HISTTIMEFORMAT="%F %T  "
+shopt -s histappend     # append to history file, don't overwrite
+shopt -s cmdhist        # save multi-line commands as single entry
+
+
+# =============================================================
+#  Shell Options
+# =============================================================
+
+shopt -s autocd         # cd by typing directory name
+shopt -s cdspell        # autocorrect minor typos in cd
+shopt -s dirspell       # autocorrect typos in path completion
+shopt -s checkwinsize   # update LINES/COLUMNS after each command
+shopt -s globstar       # ** matches files and dirs recursively
+shopt -s extglob        # extended pattern matching: ?(x) *(x) +(x)
+
+
+# =============================================================
+#  Completion
+# =============================================================
+
+if ! shopt -oq posix; then
+    if   [ -f /usr/share/bash-completion/bash_completion ]; then
+        . /usr/share/bash-completion/bash_completion
+    elif [ -f /etc/bash_completion ]; then
+        . /etc/bash_completion
+    fi
+fi
+
+
+# =============================================================
+#  Prompt
+#  Two-line: [user@host] ~/path (branch*)
+#            $
+# =============================================================
+
+_ps1_git() {
+    local branch dirty
+    branch="$(git symbolic-ref --short HEAD 2>/dev/null)" || return
+    dirty="$(git status --porcelain 2>/dev/null | head -1)"
+    printf ' \033[33m(%s%s)\033[0m' "$branch" "${dirty:+*}"
+}
+
+PS1='\[\033[38;5;240m\][\[\033[32;1m\]\u\[\033[38;5;240m\]@\[\033[36;1m\]\h\[\033[38;5;240m\]]\[\033[0m\]'\
+' \[\033[34;1m\]\w\[\033[0m\]$(_ps1_git)\n\[\033[33;1m\]\$\[\033[0m\] '
+
+
+# =============================================================
+#  Pager
+#  LESSOPEN set here (not profile) to avoid subprocesses at login.
+# =============================================================
+
+if command -v bat >/dev/null 2>&1; then
+    export LESSOPEN="| bat --color=always --style=plain --paging=never %s 2>/dev/null"
+    export MANPAGER="sh -c 'col -bx | bat --language=man --style=plain --color=always'"
+    export MANROFFOPT="-c"
+else
+    export LESSOPEN="| highlight -O ansi %s 2>/dev/null"
+fi
+
+
+# =============================================================
+#  Integrations
+# =============================================================
+
+# zoxide — smarter cd
+command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init bash)"

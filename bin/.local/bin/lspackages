@@ -1,0 +1,12 @@
+#!/bin/sh
+
+notify-send "📦 Repository Sync" "Checking for package updates..."
+
+numpac="$(doas xbps-install -Snu | wc -l)"
+
+if [ $numpac -gt 0 ];then
+    notify-send "🎁 Repository Sync" "Updates available. Click statusbar icon (📦) for update."
+else
+    notify-send "📦 Repository Sync"  "Sync complete. No new packages for update."
+fi
+

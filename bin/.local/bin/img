@@ -1,0 +1,3 @@
+#!/bin/sh
+
+nsxiv -tb $(find /home/najib/Pictures/ -type f -name "*.jpg" -o -name "*.png")

@@ -1,0 +1,48 @@
+super + Escape
+	pkill -USR1 -x sxhkd
+
+XF86Audio{Prev,Next}
+	mpc -q {prev,next}
+
+XF86Audio{RaiseVolume,LowerVolume}
+	pactl set-sink-volume @DEFAULT_SINK@ {+5%,-5%}
+
+XF86AudioMute
+	pactl set-sink-mute @DEFAULT_SINK@ toggle
+
+super + alt + {0-9}
+	mpc -q seek {0-9}0%
+
+super + w
+	librewolf
+
+alt + l
+	lf-open
+
+alt + e
+	MENU=rofi powermenu
+
+super + r
+	xrdb -load ~/.config/x11/xresources ; pkill -USR1 -x st ; sleep 0.1 ; xdotool key "super+F5"
+
+alt + @space
+	switch
+
+alt + r
+	themer
+
+alt + c ; {m,p,s,l}
+	{togglemixer,togglepicom,toggleswitch,slock}
+
+alt + i
+	img
+
+alt + e
+	dmenu-emoji
+
+Print
+	screenpic
+
+alt + x
+	externalpipe_buffer.sh dmenu_type
+

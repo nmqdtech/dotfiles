@@ -1,0 +1,24 @@
+local set = vim.opt
+
+set.clipboard = "unnamedplus"
+set.swapfile = false
+set.number = true
+set.relativenumber = true
+set.cursorline = true
+set.termguicolors = true
+set.showmatch = true
+set.splitbelow = true
+set.splitright = true
+set.smartcase = true
+set.smartindent = true
+set.ignorecase = true
+set.incsearch = true
+set.expandtab = true
+set.hlsearch = false
+set.wrap = false
+set.tabstop = 4
+set.softtabstop = 4
+set.shiftwidth = 4
+set.showmode = false
+set.scrolloff = 10
+set.sidescrolloff = 10

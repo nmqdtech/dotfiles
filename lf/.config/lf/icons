@@ -1,0 +1,264 @@
+# vim:ft=conf
+# lf icons — Nerd Fonts v3
+
+# file types
+ln	
+or	
+tw	t
+ow	
+st	t
+di	
+pi	p
+so	s
+bd	b
+cd	c
+su	u
+sg	g
+ex	
+fi	
+
+# web / markup
+*.styl	
+*.sass	
+*.scss	
+*.htm	
+*.html	
+*.slim	
+*.haml	
+*.ejs	
+*.css	
+*.less	
+
+# markdown / docs
+*.md	
+*.mdx	
+*.markdown	
+*.rmd	
+*.rst	
+*.tex	
+*.pdf	
+*.epub	
+*.djvu	
+
+# data / config
+*.json	
+*.webmanifest	
+*.yml	
+*.yaml	
+*.toml	
+*.ini	
+*.conf	
+*.cfg	
+*.env	
+*.xml	
+*.csv	
+*.tsv	
+
+# javascript / typescript
+*.js	
+*.mjs	
+*.jsx	
+*.ts	
+*.tsx	
+
+# c family
+*.c	
+*.h	
+*.cpp	
+*.c++	
+*.cxx	
+*.cc	
+*.cp	
+*.hh	
+*.hpp	
+*.hxx	
+*.cs	
+
+# rust
+*.rs	
+*.rlib	
+
+# go
+*.go	
+*go.mod	
+*go.sum	
+
+# scripting
+*.sh	
+*.bash	
+*.zsh	
+*.fish	
+*.ksh	
+*.csh	
+*.awk	
+*.ps1	
+*.bat	
+*.mk	
+
+# python
+*.py	
+*.pyc	
+*.pyo	
+*.pyd	
+*.ipynb	
+
+# ruby
+*.rb	
+*.gemspec	
+*.rake	
+
+# php
+*.php	
+
+# jvm
+*.java	
+*.scala	
+*.kt	
+*.kts	
+*.clj	
+*.cljc	
+*.cljs	
+*.edn	
+
+# functional
+*.hs	
+*.lhs	
+*.ml	λ
+*.mli	λ
+*.elm	
+
+# web / mobile extras
+*.vue	4
+*.dart	
+*.swift	
+*.coffee	
+*.mustache	
+*.hbs	
+*.twig	
+
+# other
+*.lua	
+*.jl	
+*.r	
+*.pl	
+*.pm	
+*.erl	
+*.hrl	
+*.ex	
+*.exs	
+*.nix	
+
+# vcs
+*.diff	
+*.patch	
+
+# editor
+*.vim	
+
+# security
+*.pem	
+*.key	
+*.crt	
+*.cert	
+*.gpg	
+
+# database
+*.db	
+*.sql	
+*.dump	
+*.sqlite	
+*.sqlite3	
+
+# images
+*.jpg	
+*.jpeg	
+*.png	
+*.gif	
+*.bmp	
+*.tif	
+*.tiff	
+*.svg	
+*.svgz	
+*.webp	
+*.avif	
+*.heic	
+*.ico	
+*.xcf	
+
+# video
+*.mkv	
+*.mp4	
+*.webm	
+*.avi	
+*.mov	
+*.flv	
+*.wmv	
+*.mpg	
+*.mpeg	
+*.m4v	
+*.ogv	
+*.vob	
+
+# audio
+*.mp3	
+*.flac	
+*.ogg	
+*.wav	
+*.m4a	
+*.aac	
+*.opus	
+*.mka	
+*.mid	
+*.midi	
+
+# archives
+*.tar	
+*.tgz	
+*.txz	
+*.tbz2	
+*.tzst	
+*.zip	
+*.gz	
+*.bz2	
+*.xz	
+*.zst	
+*.7z	
+*.rar	
+*.lz4	
+*.deb	
+*.rpm	
+*.cab	
+
+# named files
+*.gitignore	
+*.gitconfig	
+*.gitattributes	
+*.gitlab-ci.yml	
+*dockerfile	
+*Dockerfile	
+*docker-compose.yml	
+*docker-compose.yaml	
+*compose.yml	
+*compose.yaml	
+*.bashrc	
+*.zshrc	
+*.zshenv	
+*.zprofile	
+*.vimrc	
+*_vimrc	
+*makefile	
+*Makefile	
+*cmakelists.txt	
+*CMakeLists.txt	
+*license	
+*LICENSE	
+*node_modules	
+*procfile	
+*Procfile	
+*robots.txt	
+*.editorconfig	
+*justfile	
+*Justfile	
+*flake.nix	
+*flake.lock	
+*favicon.ico	

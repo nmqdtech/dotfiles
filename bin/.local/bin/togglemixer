@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# this is a script to swicth audio sink on the fly wihtout using some other program like pulsemixer
+
+thinkpad=alsa_output.pci-0000_00_1b.0.analog-stereo
+headphones=bluez_output.50_C2_ED_45_65_BA.a2dp-sink
+oneplus=bluez_output.E4_41_22_A8_53_B9.1
+# headphones=bluez_output.50_C2_ED_45_65_BA.headset-head-unit
+
+curr_device="$(pactl get-default-sink)"
+
+if [ $curr_device = $thinkpad ]
+then
+    pactl set-default-sink $oneplus
+else
+    pactl set-default-sink $thinkpad
+fi

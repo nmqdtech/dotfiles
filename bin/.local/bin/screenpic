@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+choice=$(echo -e "current_monitor\nall_monitors\nactive_window\ncustom_area" | dmenu -l 6 -c -i -p "Choose what area to screenshot?")
+output="$(date +%F_%H%M%S_%N).png"
+xclip_cmd="xclip -sel clip -t image/png"
+# import -window "$(xdotool getwindowfocus -f)" /tmp/$(date +%F_%H%M%S_%N).png
+
+
+
+custom(){
+    [[ $(pgrep -x xbanish) ]] && pkill xbanish ; sleep 0.2 ; import /tmp/"${output}" && nsxiv -b /tmp/"${output}" ; xbanish -t 5 &
+}
+case $choice in
+    current_monitor) import -window root /tmp/"${output}" && nsxiv -b /tmp/"${output}" ;;
+    all_monitors) import -window root -display :0.0 -screen /tmp/0.png ; import -window root -display :0.1 -screen /tmp/1.png ; convert +append /tmp/0.png /tmp/1.png /tmp/"${output}" ; rm /tmp/{0,1}.png && nsxiv -b /tmp/"${output}" ;;
+    active_window) import -window "$(xdotool getwindowfocus -f)" /tmp/"${output}" && nsxiv -b /tmp/"${output}" ;;
+    # custom_area) sleep 0.2 ; pkill xbanish ; import /tmp/"${output}" && nsxiv -b /tmp/"${output}" ;;
+    custom_area) custom ;;
+esac

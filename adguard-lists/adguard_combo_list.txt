@@ -1,0 +1,22 @@
+# CORE: AdGuard filters
+https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt
+https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt
+
+# CORE: Malware protection
+https://raw.githubusercontent.com/DandelionSprout/adfilt/master/Alternate%20versions%20Anti-Malware%20List/AntiMalwareAdGuardHome.txt
+
+# CORE: General StevenBlack unified hosts
+https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
+
+# OPTIONAL: Category-specific
+# Uncomment the ones you want to enable
+# Porn/NSFW
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/nsfw.txt
+# Gambling
+https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/gambling.txt
+# Fake news
+https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-only/hosts
+# Social media (can be aggressive)
+# https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social-only/hosts
+# Anti-piracy
+# https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/anti.piracy.txt

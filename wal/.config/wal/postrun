@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# dunstconf="${XDG_CONFIG_HOME:-$HOME/.config}/dunst/dunstrc"
+# zathuraconf="${XDG_CONFIG_HOME:-$HOME/.config}/zathura/zathurarc"
+
+dunstconf="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/dunst/.config/dunst/dunstrc"
+zathuraconf="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles/zathura/.config/zathura/zathurarc"
+
+# source "${XDG_CACHE_HOME:-$HOME/.cache}/wal/colors.sh"
+
+mv -n "$dunstconf" "$dunstconf.bak"
+mv -n "$zathuraconf" "$zathuraconf.bak"
+
+cp "${XDG_CACHE_HOME:-$HOME/.cache}/wal/dunstrc" "$dunstconf"
+cp "${XDG_CACHE_HOME:-$HOME/.cache}/wal/zathurarc" "$zathuraconf"
+
+pkill dunst; setsid -f dunst

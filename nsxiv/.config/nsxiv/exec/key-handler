@@ -1,0 +1,174 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/nsxiv/exec/key-handler
+#
+#  Called by nsxiv when a bound key is pressed.
+#  Selected image paths are piped to stdin, one per line.
+#  $1 is the key pressed.
+#
+#  Bindings:
+#    c      copy selected image(s) to a directory
+#    m      move selected image(s) to a directory
+#    w      set image as wallpaper
+#    r/R    rotate 90 clockwise / counter-clockwise
+#    f      flip horizontally
+#    y      yank filename to clipboard
+#    Y      yank full path to clipboard
+#    d      delete with confirmation
+#    i      show file info
+#    g      open in gimp
+#
+#  Launcher: controlled by $MENU (rofi | dmenu | fzfmenu)
+#  Set globally in ~/.config/shell/profile
+# =============================================================
+
+# Source the menu dispatcher so menu() is available
+. menu || { notify-send "nsxiv" "menu not found in PATH"; exit 1; }
+
+
+# =============================================================
+#  Directory picker
+#
+#  Uses zoxide's frecency-ranked directory list as candidates.
+#  Piped into menu() so it respects your $MENU preference.
+#
+#  Special case for fzfmenu: --print-query lets you type a
+#  completely new path not in zoxide. tail -1 handles both cases:
+#    - selected from list  -> last line is the selection
+#    - typed custom path   -> last line is what you typed
+#
+#  dmenu and rofi return whatever is typed if it doesn't match
+#  a candidate, so they work correctly without special handling.
+# =============================================================
+
+_pick_dir() {
+    _prompt="${1:-Destination:}"
+    _candidates="$(zoxide query -l 2>/dev/null)"
+
+    case "${MENU:-rofi}" in
+        fzfmenu)
+            _picked="$(
+                printf '%s\n' "$_candidates" \
+                | fzfmenu \
+                    --prompt "$_prompt > " \
+                    --print-query \
+                    --no-sort \
+                    --preview 'eza --color=always --icons "{}" 2>/dev/null || ls -1 --color=always "{}"' \
+                    --preview-window 'right:40%:wrap' \
+                | tail -1
+            )"
+            ;;
+        *)
+            # rofi and dmenu both return typed input if it doesn't
+            # match a list item — no special handling needed
+            _picked="$(
+                printf '%s\n' "$_candidates" \
+                | menu -p "$_prompt" -l 15
+            )"
+            ;;
+    esac
+
+    # Expand ~ in case user typed it manually
+    printf '%s' "$_picked" | sed "s|^~|$HOME|"
+}
+
+
+# =============================================================
+#  Helpers
+# =============================================================
+
+notify() { notify-send -a nsxiv "$@" 2>/dev/null; }
+
+_validate_dir() {
+    [ -z "$1" ]  && notify "Cancelled" "No directory selected." && return 1
+    [ -d "$1" ]  || { notify "Not a directory" "$1"; return 1; }
+    return 0
+}
+
+
+# =============================================================
+#  Main — process each file piped in by nsxiv
+#  destdir is resolved once and reused for all selected files
+# =============================================================
+
+destdir=""
+
+while read -r file; do
+    case "$1" in
+
+        # ── Copy ──────────────────────────────────────────────
+        c)
+            [ -z "$destdir" ] && destdir="$(_pick_dir "Copy to")"
+            _validate_dir "$destdir" || exit 1
+            cp -- "$file" "$destdir/" \
+                && notify "Copied" "$(basename "$file") -> $destdir" \
+                || notify "Copy failed" "$file"
+            ;;
+
+        # ── Move ──────────────────────────────────────────────
+        m)
+            [ -z "$destdir" ] && destdir="$(_pick_dir "Move to")"
+            _validate_dir "$destdir" || exit 1
+            mv -- "$file" "$destdir/" \
+                && notify "Moved" "$(basename "$file") -> $destdir" \
+                || notify "Move failed" "$file"
+            ;;
+
+        # ── Wallpaper ─────────────────────────────────────────
+        w)
+            setbg "$file" && notify "Wallpaper set" "$(basename "$file")"
+            ;;
+
+        # ── Rotate clockwise ──────────────────────────────────
+        r)
+            magick "$file" -rotate 90 "$file" \
+                && notify "Rotated" "+90 $(basename "$file")"
+            ;;
+
+        # ── Rotate counter-clockwise ──────────────────────────
+        R)
+            magick "$file" -rotate -90 "$file" \
+                && notify "Rotated" "-90 $(basename "$file")"
+            ;;
+
+        # ── Flip horizontal ───────────────────────────────────
+        f)
+            magick "$file" -flop "$file" \
+                && notify "Flipped" "$(basename "$file")"
+            ;;
+
+        # ── Yank filename ─────────────────────────────────────
+        y)
+            printf '%s' "$(basename "$file")" | xclip -selection clipboard \
+                && notify "Yanked" "$(basename "$file")"
+            ;;
+
+        # ── Yank full path ────────────────────────────────────
+        Y)
+            printf '%s' "$(readlink -f "$file")" | xclip -selection clipboard \
+                && notify "Yanked path" "$(readlink -f "$file")"
+            ;;
+
+        # ── Delete with confirmation ──────────────────────────
+        d)
+            answer="$(printf 'No\nYes' | menu -p "Delete $(basename "$file")?")"
+            [ "$answer" = "Yes" ] \
+                && rm -- "$file" \
+                && notify "Deleted" "$(basename "$file")"
+            ;;
+
+        # ── Open in GIMP ──────────────────────────────────────
+        g)
+            setsid -f gimp "$file" >/dev/null 2>&1
+            ;;
+
+        # ── File info ─────────────────────────────────────────
+        i)
+            notify "$(basename "$file")" \
+                "$(mediainfo "$file" \
+                    | grep -E 'Width|Height|Format|File size|Duration|Bit rate' \
+                    | sed 's/^ *//')"
+            ;;
+
+    esac
+done

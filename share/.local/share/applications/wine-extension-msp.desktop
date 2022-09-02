@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Wine Installer
+MimeType=application/x-wine-extension-msp;
+Exec=env "WINEPREFIX=/home/najib/.local/share/winegui/prefixes/Windowz" wine start /ProgIDOpen "Msi.Patch" %f
+NoDisplay=true
+StartupNotify=true
+Icon=D23E_msiexec.0

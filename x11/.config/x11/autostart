@@ -1,0 +1,100 @@
+#!/bin/sh
+# =============================================================
+#  ~/.config/x11/autostart
+#
+#  Session services launched once X is running.
+#  Called by xinitrc before exec-ing the WM.
+#
+#  Guidelines:
+#    - Use setsid for daemons that should survive shell exit
+#    - Add & to non-blocking processes
+#    - Order matters: auth → hardware → input → display → UI
+#
+#  To disable an entry: comment it out here, don't touch xinitrc.
+# =============================================================
+
+# Logging — all service output goes here
+LOGDIR="${XDG_STATE_HOME:-$HOME/.local/state}/x11"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/autostart.log"
+
+_start() {
+    # _start <name> <command...>
+    # Launches command in background, logs to autostart.log
+    local name="$1"; shift
+    printf '[%s] starting %s\n' "$(date '+%H:%M:%S')" "$name" >> "$LOG"
+    "$@" >> "$LOG" 2>&1 &
+}
+
+_sstart() {
+    # _sstart <name> <command...>
+    # Like _start but uses setsid (survives shell exit)
+    local name="$1"; shift
+    printf '[%s] starting %s (setsid)\n' "$(date '+%H:%M:%S')" "$name" >> "$LOG"
+    setsid -f "$@" >> "$LOG" 2>&1
+}
+
+printf '\n=== autostart %s ===\n' "$(date)" >> "$LOG"
+
+
+# =============================================================
+#  Auth / Security
+#  Must be first — other services may depend on the keyring.
+# =============================================================
+
+# Polkit agent (required for doas/sudo GUI prompts)
+_start  polkit   /usr/libexec/polkit-gnome-authentication-agent-1
+
+
+# =============================================================
+#  Hardware
+# =============================================================
+
+# Automount removable media with desktop notifications
+_start  udiskie  udiskie --automount --notify
+
+# PipeWire audio server
+_start  pipewire pipewire
+
+
+# =============================================================
+#  Input
+# =============================================================
+
+# Keyboard remaps (caps→esc, etc) — your custom script
+_start  remaps   remaps
+
+# Touchpad toggle (enable/disable on lid/dock events)
+_start  togglepad togglepad
+
+# Hotkey daemon
+_start  sxhkd    sxhkd
+
+
+# =============================================================
+#  Display
+# =============================================================
+
+# Apply saved monitor layout (if autorandr is configured)
+_start  autorandr autorandr --change
+
+# Set wallpaper (reads from $XDG_DATA_HOME/bg symlink)
+_start  setbg    setbg
+
+# Compositor (picom toggle script)
+_start  picom    togglepicom
+
+
+# =============================================================
+#  Notifications / Status
+# =============================================================
+
+_start  dunst     dunst
+_start  dwmblocks dwmblocks
+
+
+# =============================================================
+#  Audio
+# =============================================================
+
+_start  mpd      mpd

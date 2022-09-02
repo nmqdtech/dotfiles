@@ -1,0 +1,32 @@
+########################################
+# sb-battery
+########################################
+#!/bin/sh
+
+case "$BLOCK_BUTTON" in
+    3) notify-send " Battery" "Charging: \nDischarging: \nLow battery warning included" ;;
+    4) xbacklight -inc 10 2>/dev/null ;;
+    5) xbacklight -dec 10 2>/dev/null ;;
+    6) setsid -f "$TERMINAL" -e "$EDITOR" "$0" ;;
+esac
+
+battery=$(find /sys/class/power_supply -maxdepth 1 -name 'BAT*' | head -n 1)
+[ -z "$battery" ] && exit 0
+
+capacity=$(cat "$battery/capacity" 2>/dev/null)
+status=$(cat "$battery/status" 2>/dev/null)
+
+case "$status" in
+    Charging) icon="" ;;
+    Full) icon="" ;;
+    Discharging)
+        if [ "$capacity" -ge 80 ]; then icon=""
+        elif [ "$capacity" -ge 60 ]; then icon=""
+        elif [ "$capacity" -ge 40 ]; then icon=""
+        elif [ "$capacity" -ge 20 ]; then icon=""
+        else icon=""; warn=" !"; fi
+        ;;
+    *) icon="" ;;
+esac
+
+printf "^c#b8bb26^ %s %s%%%s ^d^\n" "$icon " "$capacity" "$warn"

@@ -1,0 +1,108 @@
+#!/bin/sh
+# =============================================================
+#  displayselect — xrandr display configurator
+#  MENU=dmenu displayselect   ← override launcher at runtime
+# =============================================================
+
+. menu || { printf 'displayselect: menu not found in PATH\n' >&2; exit 1; }
+
+notify() { notify-send -a displayselect "$@" 2>/dev/null || printf '%s\n' "$*" >&2; }
+die()    { notify "❌ displayselect" "$*"; exit 1; }
+
+_xrandr="$(xrandr -q 2>/dev/null)" || die "xrandr failed"
+allposs="$(printf '%s\n' "$_xrandr" | awk '/connected/ {print $1}')"
+screens="$(printf '%s\n' "$_xrandr" | awk '/ connected [^(]/ {print $1}')"
+
+_native_res() {
+    printf '%s\n' "$_xrandr" | awk -v out="$1" '
+        $0 ~ "^"out { found=1; next }
+        found && /\*/ { print $1; exit }
+        found && /^\S/ { exit }
+    '
+}
+
+_disable_others() {
+    printf '%s\n' "$allposs" | grep -v "^${1}$" | \
+        awk '{printf "--output %s --off ", $1}'
+}
+
+onescreen() {
+    # shellcheck disable=SC2046
+    xrandr --output "$1" --primary --auto --scale 1x1 \
+        $(_disable_others "$1") || die "xrandr failed"
+}
+
+twoscreen() {
+    mirror=$(printf "no\nyes" | menu -p "Mirror displays?") || return
+    if [ "$mirror" = "yes" ]; then
+        external=$(printf '%s\n' "$screens" | menu -p "Optimise for:") || return
+        internal=$(printf '%s\n' "$screens" | grep -v "^${external}$")
+        res_ext="$(_native_res "$external")"; res_int="$(_native_res "$internal")"
+        ext_x="${res_ext%%x*}"; ext_y="${res_ext##*x}"
+        int_x="${res_int%%x*}"; int_y="${res_int##*x}"
+        scale_x="$(printf 'scale=6; %s / %s\n' "$ext_x" "$int_x" | bc)"
+        scale_y="$(printf 'scale=6; %s / %s\n' "$ext_y" "$int_y" | bc)"
+        xrandr --output "$external" --auto --scale 1x1 \
+               --output "$internal" --auto --same-as "$external" \
+               --scale "${scale_x}x${scale_y}" || die "Mirror failed"
+    else
+        primary=$(printf '%s\n' "$screens" | menu -p "Primary display:") || return
+        secondary=$(printf '%s\n' "$screens" | grep -v "^${primary}$")
+        [ "$(printf '%s\n' "$secondary" | wc -l)" -gt 1 ] && \
+            secondary=$(printf '%s\n' "$secondary" | menu -p "Secondary:") || return
+        direction=$(printf "left\nright\nabove\nbelow" | \
+            menu -p "${secondary} placement vs ${primary}:") || return
+        xrandr --output "$primary"   --primary --auto --scale 1x1 \
+               --output "$secondary" --"${direction}"-of "$primary" --auto --scale 1x1 \
+               || die "Dual xrandr failed"
+    fi
+}
+
+morescreen() {
+    primary=$(printf '%s\n' "$screens" | menu -p "Primary display:") || return
+    rest="$(printf '%s\n' "$screens" | grep -v "^${primary}$")"
+    secondary=$(printf '%s\n' "$rest" | menu -p "Secondary display:") || return
+    direction=$(printf "left\nright\nabove\nbelow" | \
+        menu -p "${secondary} side of ${primary}:") || return
+    tertiary=$(printf '%s\n' "$rest" | grep -v "^${secondary}$" | \
+        menu -p "Tertiary display:") || return
+    opp="$(printf "left\nright\nabove\nbelow" | grep -v "^${direction}$" | head -1)"
+    xrandr --output "$primary"   --primary --auto --scale 1x1 \
+           --output "$secondary" --"${direction}"-of "$primary" --auto --scale 1x1 \
+           --output "$tertiary"  --"${opp}"-of    "$primary"   --auto --scale 1x1 \
+           || die "Triple xrandr failed"
+}
+
+multimon() {
+    case "$(printf '%s\n' "$screens" | wc -l)" in
+        2) twoscreen  ;;
+        *) morescreen ;;
+    esac
+}
+
+postrun() {
+    command -v setbg >/dev/null 2>&1 && setbg
+    pkill -x dunst 2>/dev/null; setsid -f dunst >/dev/null 2>&1 || true
+    pidof dwm >/dev/null && xdotool key super+F5 2>/dev/null || true
+}
+
+num="$(printf '%s\n' "$screens" | grep -c .)"
+[ "$num" -lt 1 ] && die "No connected displays found."
+
+if [ "$num" -eq 1 ]; then
+    onescreen "$screens"; postrun
+    notify "💻 displayselect" "Single display: $screens"; exit 0
+fi
+
+chosen=$(printf '%s\nmulti-monitor\nmanual (arandr)' "$screens" | \
+    menu -p "Display layout:" -l 8) || exit 0
+
+case "$chosen" in
+    "manual (arandr)") command -v arandr >/dev/null 2>&1 || die "arandr not installed"; arandr & ;;
+    "multi-monitor")   multimon ;;
+    "") exit 0 ;;
+    *) onescreen "$chosen" ;;
+esac
+
+postrun
+notify "🖥️ displayselect" "Layout applied."

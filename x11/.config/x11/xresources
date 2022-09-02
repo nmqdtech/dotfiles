@@ -1,0 +1,28 @@
+! =============================================================
+!  ~/.config/x11/xresources
+!
+!  Loaded at X startup by xinitrc:
+!    xrdb -merge ~/.config/x11/xresources
+!
+!  Theme (#include line) is managed by the `themer` script.
+!  Run `themer` to switch colorschemes - do not edit it manually.
+! =============================================================
+
+
+! =============================================================
+!  st - terminal
+! =============================================================
+
+st.borderpx:        5
+*.alpha:            0.9
+*.alphaUnfocused:   0.7
+
+! Uncomment to override font without recompiling st:
+! st.font: JetBrainsMono Nerd Font:style=Regular:size=11
+
+
+! =============================================================
+!  Colorscheme
+! =============================================================
+
+#include "/home/najib/.config/x11/xcolors/tokyonight_night"

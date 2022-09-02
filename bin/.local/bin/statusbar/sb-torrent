@@ -1,0 +1,20 @@
+########################################
+# sb-torrent
+########################################
+#!/bin/sh
+
+case "$BLOCK_BUTTON" in
+    1) setsid -f "$TERMINAL" -e stig ;;
+    2) td-toggle ;;
+    3) notify-send " Torrents" "Left: open stig\nMiddle: toggle daemon" ;;
+    6) setsid -f "$TERMINAL" -e "$EDITOR" "$0" ;;
+esac
+
+out=$(transmission-remote -l 2>/dev/null | grep '%')
+[ -z "$out" ] && exit 0
+
+seed=$(printf "%s\n" "$out" | grep -c 'Seeding')
+down=$(printf "%s\n" "$out" | grep -c '%.*Down')
+stop=$(printf "%s\n" "$out" | grep -c 'Stopped')
+
+printf "^c#d3869b^ %s %s %s ^d^\n" "$down" "$seed" "$stop"

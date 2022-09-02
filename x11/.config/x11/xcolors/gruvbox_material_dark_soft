@@ -1,0 +1,87 @@
+! special
+*foreground:  #e2d3ba
+*background:  #32302f
+*cursorColor: #e2d3ba
+
+! black
+*color0:       #32302f
+*color8:       #928374
+
+! red
+*color1:       #ea6962
+*color9:       #ef938e
+
+! green
+*color2:       #a9b665
+*color10:      #bbc585
+
+! yellow
+*color3:       #d8a657
+*color11:      #e1bb7e
+
+! blue
+*color4:       #7daea3
+*color12:      #9dc2ba
+
+! magenta
+*color5:       #d3869b
+*color13:      #e1acbb
+
+! cyan
+*color6:       #89b482
+*color14:      #a7c7a2
+
+! white
+*color7:       #d4be98
+*color15:      #e2d3ba
+
+
+*normfgcolor:             #e2d3ba
+*normbgcolor:             #32302f
+*normbordercolor:         #32302f
+*selfgcolor:              #32302f
+*selbgcolor:              #e2d3ba
+*selbordercolor:          #e2d3ba
+*scratchnormfgcolor:      #e2d3ba
+*scratchnormbgcolor:      #32302f
+*scratchnormbordercolor:  #ea6962
+*scratchselfgcolor:       #e2d3ba
+*scratchselbgcolor:       #32302f
+*scratchselbordercolor:   #a9b665
+*titlenormfgcolor:        #e2d3ba
+*titlenormbgcolor:        #32302f
+*titlenormbordercolor:    #32302f
+*titleselfgcolor:         #32302f
+*titleselbgcolor:         #e2d3ba
+*titleselbordercolor:     #32302f
+*hidnormfgcolor:          #32302f
+*hidnormbgcolor:          #ea6962
+*hidnormbordercolor:      #32302f
+*hidselfgcolor:           #32302f
+*hidselbgcolor:           #e2d3ba
+*hidselbordercolor:       #32302f
+*urgfgcolor:              #e2d3ba
+*urgbgcolor:              #32302f
+*urgbordercolor:          #f00000
+*tagsfgcolor:             #e2d3ba
+*tagsbgcolor:             #32302f
+*tag1fgcolor:             #89b482
+*tag1bgcolor:             #32302f
+*tag2fgcolor:             #d8a657
+*tag2bgcolor:             #32302f
+*tag3fgcolor:             #ef938e
+*tag3bgcolor:             #32302f
+*tag4fgcolor:             #d4be98
+*tag4bgcolor:             #32302f
+*tag5fgcolor:             #d3869b
+*tag5bgcolor:             #32302f
+*tag6fgcolor:             #7daea3
+*tag6bgcolor:             #32302f
+*tag7fgcolor:             #ea6962
+*tag7bgcolor:             #32302f
+*tag8fgcolor:             #d3869b
+*tag8bgcolor:             #32302f
+*tag9fgcolor:             #e1bb7e
+*tag9bgcolor:             #32302f
+*layoutfgcolor:           #e2d3ba
+*layoutbgcolor:           #32302f

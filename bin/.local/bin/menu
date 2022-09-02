@@ -1,0 +1,154 @@
+#!/bin/sh
+# =============================================================
+#  menu — unified menu launcher dispatcher
+#  Install: ~/.local/bin/menu
+#
+#  USAGE (from any script):
+#    result=$(some_list | menu -p "Prompt:" -l 15)
+#
+#  GLOBAL CONFIG (set in ~/.profile or ~/.zshenv):
+#    export MENU=rofi          # rofi | dmenu | fzfmenu
+#                              # default: rofi
+#
+#  RUNTIME OVERRIDE:
+#    MENU=dmenu displayselect
+#    MENU=fzfmenu themer
+#
+#  INTENT FLAGS (launcher-agnostic — all scripts use these):
+#    -p <prompt>   Prompt string shown to user
+#    -l <n>        Approximate number of visible lines
+#    -i            Case-insensitive (no-op for fzf, always is)
+#    -f            Fuzzy matching (no-op for dmenu, ignored)
+#    -1            Auto-select if only one item (rofi/fzf only)
+#    -q <query>    Pre-fill query string
+#
+#  All launcher-specific flags (colors, borders, fonts,
+#  animations, themes) are configured HERE, not in callers.
+# =============================================================
+
+# ── Per-launcher configuration ────────────────────────────────
+# This is the single place you tune appearance.
+# Callers never touch these.
+
+_dmenu_base_flags() {
+    # -c        centered float
+    # -bw 2     border width
+    # Add font: -fn 'monospace:size=11'
+    # Add colors: -nb '#1a1a1a' -nf '#d4d4d4' -sb '#d08770' -sf '#1a1a1a'
+    printf '%s' "-i -c -bw 2"
+}
+
+_rofi_base_flags() {
+    # -matching fuzzy    fuzzy everywhere
+    # -no-custom         don't allow typed input as selection
+    # -scroll-method 1   mouse scroll
+    # Theme: put your rofi theme file at ~/.config/rofi/menu.rasi
+    #        and uncomment the -theme line below.
+    printf '%s' "-dmenu -i -matching fuzzy -scroll-method 1"
+    # printf '%s' "-dmenu -i -matching fuzzy -theme menu"
+}
+
+_fzfmenu_base_flags() {
+    # These become FZF_DEFAULT_OPTS inside fzfmenu.
+    # fzfmenu itself is expected at ~/.local/bin/fzfmenu.
+    printf '%s' "--layout=reverse --border=none --no-sort"
+}
+
+# ── Launcher resolution ───────────────────────────────────────
+
+_resolve_launcher() {
+    _want="${MENU:-rofi}"
+    case "$_want" in
+        rofi)    command -v rofi    >/dev/null 2>&1 && { printf rofi;    return; } ;;
+        dmenu)   command -v dmenu   >/dev/null 2>&1 && { printf dmenu;   return; } ;;
+        fzfmenu) command -v fzfmenu >/dev/null 2>&1 && { printf fzfmenu; return; } ;;
+    esac
+    # Requested launcher missing — fallback chain
+    printf 'menu: launcher "%s" not found, falling back\n' "$_want" >&2
+    command -v rofi    >/dev/null 2>&1 && { printf rofi;    return; }
+    command -v dmenu   >/dev/null 2>&1 && { printf dmenu;   return; }
+    command -v fzfmenu >/dev/null 2>&1 && { printf fzfmenu; return; }
+    printf 'menu: no launcher found (install rofi, dmenu, or fzfmenu)\n' >&2
+    exit 127
+}
+
+# ── Main dispatcher ───────────────────────────────────────────
+
+menu() {
+    # Parse intent flags
+    _prompt=""
+    _lines=""
+    _query=""
+    _autoselect=0
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -p) _prompt="$2"; shift 2 ;;
+            -l) _lines="$2";  shift 2 ;;
+            -q) _query="$2";  shift 2 ;;
+            -1) _autoselect=1; shift  ;;
+            -i) shift ;;  # always case-insensitive — absorbed
+            -f) shift ;;  # fuzzy — absorbed (rofi always is, fzf always is)
+            --) shift; break ;;
+            *)  printf 'menu: unknown flag %s\n' "$1" >&2; shift ;;
+        esac
+    done
+
+    _launcher="$(_resolve_launcher)"
+
+    case "$_launcher" in
+
+        # ── dmenu ─────────────────────────────────────────────
+        dmenu)
+            _f="$(_dmenu_base_flags)"
+            [ -n "$_prompt" ] && _f="$_f -p $(printf '%s' "$_prompt" | _sh_quote)"
+            [ -n "$_lines"  ] && _f="$_f -l $_lines"
+            [ -n "$_query"  ] && _f="$_f -s $(printf '%s' "$_query" | _sh_quote)"
+            # shellcheck disable=SC2086
+            eval "dmenu $_f"
+            ;;
+
+        # ── rofi ──────────────────────────────────────────────
+        rofi)
+            _f="$(_rofi_base_flags)"
+            [ -n "$_prompt" ] && _f="$_f -p $(printf '%s' "$_prompt" | _sh_quote)"
+            [ -n "$_lines"  ] && _f="$_f -l $_lines"
+            [ -n "$_query"  ] && _f="$_f -filter $(printf '%s' "$_query" | _sh_quote)"
+            [ "$_autoselect" -eq 1 ] && _f="$_f -auto-select"
+            # shellcheck disable=SC2086
+            eval "rofi $_f"
+            ;;
+
+        # ── fzfmenu ───────────────────────────────────────────
+        fzfmenu)
+            _f="$(_fzfmenu_base_flags)"
+            [ -n "$_prompt" ] && _f="$_f --prompt $(printf '%s > ' "$_prompt" | _sh_quote)"
+            [ -n "$_query"  ] && _f="$_f --query $(printf '%s' "$_query" | _sh_quote)"
+            # -l lines → fzf doesn't have a line count (height is set globally),
+            # but we can hint via --height if the value is set
+            [ -n "$_lines"  ] && _f="$_f --height $(( _lines + 4 ))"
+            [ "$_autoselect" -eq 1 ] && _f="$_f --select-1"
+            # shellcheck disable=SC2086
+            eval "fzfmenu $_f"
+            ;;
+    esac
+}
+
+# ── Internal helpers ──────────────────────────────────────────
+
+# Single-quote a string safely for eval
+_sh_quote() {
+    _in="$(cat)"
+    printf "'%s'" "$(printf '%s' "$_in" | sed "s/'/'\\''/g")"
+}
+
+# ── Standalone mode ───────────────────────────────────────────
+# When called directly (not sourced): act as a direct dmenu replacement.
+#   printf 'a\nb\nc\n' | menu -p "Pick:"
+#   echo $MENU → rofi
+
+case "$0" in
+    */menu|menu)
+        menu "$@"
+        ;;
+esac

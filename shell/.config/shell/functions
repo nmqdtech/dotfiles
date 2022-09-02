@@ -1,0 +1,207 @@
+#!/bin/bash
+# =============================================================
+#  ~/.config/shell/functions
+#
+#  Sourced by bashrc and zshrc.
+#  Bash syntax used intentionally — zsh is compatible with all
+#  constructs used here.
+# =============================================================
+
+
+# =============================================================
+#  note — simple persistent scratchpad
+#
+#  Usage:
+#    note           print all notes
+#    note <text>    append text
+#    note -e        open in $EDITOR
+#    note -c        clear all notes
+# =============================================================
+
+note() {
+    local notefile="${XDG_DATA_HOME:-$HOME/.local/share}/notes"
+    [ -f "$notefile" ] || touch "$notefile"
+
+    case "${1:-}" in
+        "")   cat "$notefile" ;;
+        -e)   "${EDITOR:-nvim}" "$notefile" ;;
+        -c)   printf "" > "$notefile" && printf 'Notes cleared.\n' ;;
+        *)    printf '%s\n' "$*" >> "$notefile" ;;
+    esac
+}
+
+
+# =============================================================
+#  bcd — fzf interactive directory browser
+#
+#  Usage:
+#    bcd           open fzf browser in current dir
+#    bcd <path>    cd to path directly
+# =============================================================
+
+bcd() {
+    if [ $# -ne 0 ]; then
+        builtin cd "$@" || return
+        return
+    fi
+
+    while true; do
+        local dir
+        dir="$(
+            { echo ".."; ls -p | grep '/$' | sed 's;/$;;'; } \
+            | fzf \
+                --reverse \
+                --prompt '  cd > ' \
+                --preview '
+                    t="$(pwd)/{}";
+                    t="$(readlink -f "$t")";
+                    printf "%s\n\n" "$t";
+                    eza --color=always --icons --group-directories-first "$t" 2>/dev/null \
+                        || ls -p --color=always "$t"
+                '
+        )" || return 0
+        [ -z "$dir" ] && return 0
+        builtin cd "$dir" &>/dev/null || return
+    done
+}
+
+
+# =============================================================
+#  fkill — fzf process killer
+#
+#  Usage:
+#    fkill          select process(es) to kill with SIGKILL
+#    fkill -15      select process(es) to kill with SIGTERM
+# =============================================================
+
+fkill() {
+    local signal="${1:--9}"
+    local header pid_col ps_cmd
+
+    if [ "$UID" = "0" ]; then
+        ps_cmd="ps -ef"
+        pid_col=2
+    else
+        ps_cmd="ps -f -u $UID"
+        pid_col=2
+    fi
+
+    local pid
+    pid="$(
+        $ps_cmd | sed 1d \
+        | fzf -m \
+            --prompt '  kill > ' \
+            --header 'TAB to multi-select' \
+        | awk "{print \$$pid_col}"
+    )"
+
+    [ -n "$pid" ] && printf '%s\n' "$pid" | xargs kill "$signal"
+}
+
+
+# =============================================================
+#  fmpc — fzf mpd track picker
+#
+#  Usage:
+#    fmpc           open playlist picker
+#    fmpc <query>   open picker with pre-filled query
+# =============================================================
+
+fmpc() {
+    local pos
+    pos="$(
+        mpc -f '%position%) %artist% - %title%' playlist \
+        | fzf \
+            --query="${1:-}" \
+            --reverse \
+            --prompt '  mpd > ' \
+            --select-1 \
+            --exit-0 \
+        | sed -n 's/^\([0-9]\+\)).*/\1/p'
+    )" || return 1
+
+    [ -n "$pos" ] && mpc -q play "$pos"
+}
+
+
+# =============================================================
+#  extract — universal archive extractor
+#  Prefers ouch if installed, falls back to individual tools.
+#
+#  Usage: extract <file> [file ...]
+# =============================================================
+
+extract() {
+    if command -v ouch >/dev/null 2>&1; then
+        ouch decompress "$@"
+        return
+    fi
+    for f; do
+        if [ ! -f "$f" ]; then
+            printf 'extract: not a file: %s\n' "$f" >&2
+            continue
+        fi
+        case "$f" in
+            *.tar.bz2|*.tbz2)  tar xjf "$f"          ;;
+            *.tar.gz|*.tgz)    tar xzf "$f"          ;;
+            *.tar.xz|*.txz)    tar xJf "$f"          ;;
+            *.tar.zst)         tar --zstd -xf "$f"   ;;
+            *.tar)             tar xf  "$f"           ;;
+            *.bz2)             bunzip2 "$f"           ;;
+            *.gz)              gunzip  "$f"           ;;
+            *.xz)              unxz    "$f"           ;;
+            *.zip)             unzip   "$f"           ;;
+            *.7z)              7z x    "$f"           ;;
+            *.rar)             unrar x "$f"           ;;
+            *.zst)             zstd -d "$f"           ;;
+            *)  printf 'extract: unknown format: %s\n' "$f" >&2 ;;
+        esac
+    done
+}
+
+
+# =============================================================
+#  mkcd — mkdir and cd in one step
+# =============================================================
+
+mkcd() { mkdir -p "$1" && builtin cd "$1"; }
+
+
+# =============================================================
+#  up — go N levels up in the directory tree
+#
+#  Usage:
+#    up      go up 1
+#    up 3    go up 3
+# =============================================================
+
+up() {
+    local n="${1:-1}" path=''
+    while [ "$n" -gt 0 ]; do
+        path="../$path"
+        n=$(( n - 1 ))
+    done
+    builtin cd "${path:-.}" || return
+}
+
+
+# =============================================================
+#  confirm — simple y/N prompt for scripts
+#
+#  Usage:
+#    confirm "Delete everything?" && rm -rf /
+# =============================================================
+
+confirm() {
+    printf '%s [y/N] ' "${1:-Are you sure?}"
+    read -r ans
+    case "$ans" in [yY]*) return 0 ;; *) return 1 ;; esac
+}
+
+waltheme() {
+    wal -i "$1"
+    xrdb -merge ~/.cache/wal/colors.Xresources
+    pidof dwm >/dev/null && xdotool key super+r
+    pywalfox update
+    pkill -x dunst; setsid -f dunst &
+}

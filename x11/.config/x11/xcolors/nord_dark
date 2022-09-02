@@ -1,0 +1,97 @@
+! special
+*foreground:   #d8dee9
+*background:   #2e3440
+*cursorcolor:  #d8dee9
+
+! black
+*color0:       #3b4252
+*color8:       #4c566a
+
+! red
+*color1:       #bf616a
+*color9:       #bf616a
+
+! green
+*color2:       #a3be8c
+*color10:      #a3be8c
+
+! yellow
+*color3:       #ebcb8b
+*color11:      #ebcb8b
+
+! blue
+*color4:       #81a1c1
+*color12:      #81a1c1
+
+! magenta
+*color5:       #b48ead
+*color13:      #b48ead
+
+! cyan
+*color6:       #88c0d0
+*color14:      #8fbcbb
+
+! white
+*color7:       #e5e9f0
+*color15:      #eceff4
+
+
+*normfgcolor: #d8dee9
+*normbgcolor: #2e3440
+*normbordercolor: #2e3440
+*selfgcolor: #2e3440
+*selbgcolor: #d8dee9
+*selbordercolor: #d8dee9
+*scratchnormfgcolor: #d8dee9
+*scratchnormbgcolor: #2e3440
+*scratchnormbordercolor: #bf616a
+*scratchselfgcolor: #d8dee9
+*scratchselbgcolor: #2e3440
+*scratchselbordercolor: #a3be8c
+*titlenormfgcolor: #d8dee9
+*titlenormbgcolor: #2e3440
+*titlenormbordercolor: #2e3440
+*titleselfgcolor: #2e3440
+*titleselbgcolor: #d8dee9
+*titleselbordercolor: #2e3440
+*urgfgcolor: #d8dee9
+*urgbgcolor: #2e3440
+*urgbordercolor: #f00000
+*tagsfgcolor: #d8dee9
+*tagsbgcolor: #2e3440
+*tag1fgcolor: #89b482
+*tag1bgcolor: #2e3440
+*tag2fgcolor: #d8a657
+*tag2bgcolor: #2e3440
+*tag3fgcolor: #ef938e
+*tag3bgcolor: #2e3440
+*tag4fgcolor: #d4be98
+*tag4bgcolor: #2e3440
+*tag5fgcolor: #d3869b
+*tag5bgcolor: #2e3440
+*tag6fgcolor: #7daea3
+*tag6bgcolor: #2e3440
+*tag7fgcolor: #ea6962
+*tag7bgcolor: #2e3440
+*tag8fgcolor: #d3869b
+*tag8bgcolor: #2e3440
+*tag9fgcolor: #e1bb7e
+*tag9bgcolor: #2e3440
+*termcol0:    #2e3440
+*termcol1:    #2e3440
+*termcol2:    #2e3440
+*termcol3:    #2e3440
+*termcol4:    #2e3440
+*termcol5:    #2e3440
+*termcol6:    #2e3440
+*termcol7:    #2e3440
+*termcol8:    #2e3440
+*termcol9:    #2e3440
+*termcol10:   #2e3440
+*termcol11:   #2e3440
+*termcol12:   #2e3440
+*termcol13:   #2e3440
+*termcol14:   #2e3440
+*termcol15:   #2e3440
+*layoutfgcolor: #d8dee9
+*layoutbgcolor: #2e3440

@@ -1,0 +1,156 @@
+#!/bin/sh
+
+# -----------------------------
+# Config
+# -----------------------------
+CACHE="${HOME}/.cache/td_tasks"
+USE_CACHE=0   # set to 1 if you want caching
+NOTIFY=1      # set to 0 to disable notify-send
+
+# -----------------------------
+# Helpers
+# -----------------------------
+notify() {
+  [ "$NOTIFY" -eq 1 ] && command -v notify-send >/dev/null && notify-send "$1"
+}
+
+fetch_tasks() {
+  if [ "$USE_CACHE" -eq 1 ]; then
+    todoist list > "$CACHE" &
+    cat "$CACHE"
+  else
+    todoist list
+  fi
+}
+
+strip_header() {
+  sed '1d'
+}
+
+get_id() {
+  echo "$1" | awk '{print $1}'
+}
+
+preview_cmd() {
+  echo {} | awk '{print $1}' | xargs -I{} todoist show {}
+}
+
+reload_all() {
+  echo "reload(todoist list | sed '1d')"
+}
+
+# -----------------------------
+# Core UI
+# -----------------------------
+fzf_base() {
+  fzf \
+    --ansi \
+    --height=85% \
+    --layout=reverse \
+    --border \
+    --info=inline \
+    --prompt="$1" \
+    --header="$2" \
+    --preview 'id=$(echo {} | awk "{print \$1}"); todoist show "$id"' \
+    --bind "ctrl-c:execute(todoist complete {1} && notify-send 'Task completed')+reload(todoist list | sed '1d')" \
+    --bind "ctrl-d:execute(todoist delete {1} && notify-send 'Task deleted')+reload(todoist list | sed '1d')" \
+    --bind "ctrl-e:execute(todoist edit {1})+reload(todoist list | sed '1d')" \
+    --bind "ctrl-r:reload(todoist list | sed '1d')"
+}
+
+# -----------------------------
+# Views
+# -----------------------------
+view_all() {
+  fetch_tasks | strip_header | fzf_base "All > " \
+    "ENTER inspect | CTRL-C complete | CTRL-D delete | CTRL-E edit | CTRL-R refresh"
+}
+
+view_today() {
+  todoist list --filter today | strip_header | fzf_base "Today > " \
+    "Today's tasks"
+}
+
+view_overdue() {
+  todoist list --filter overdue | strip_header | fzf_base "Overdue > " \
+    "Overdue tasks"
+}
+
+view_inbox() {
+  todoist list --project Inbox | strip_header | fzf_base "Inbox > " \
+    "Inbox tasks"
+}
+
+# -----------------------------
+# Project view
+# -----------------------------
+view_project() {
+  proj=$(todoist projects | sed '1d' | fzf --prompt="Projects > ")
+
+  [ -z "$proj" ] && exit 0
+
+  name=$(echo "$proj" | cut -d' ' -f2-)
+
+  todoist list --project "$name" | strip_header | fzf \
+    --ansi \
+    --height=85% \
+    --layout=reverse \
+    --border \
+    --prompt="$name > " \
+    --preview 'id=$(echo {} | awk "{print \$1}"); todoist show "$id"' \
+    --bind "ctrl-c:execute(todoist complete {1})+reload(todoist list --project \"$name\" | sed '1d')" \
+    --bind "ctrl-d:execute(todoist delete {1})+reload(todoist list --project \"$name\" | sed '1d')" \
+    --bind "ctrl-e:execute(todoist edit {1})+reload(todoist list --project \"$name\" | sed '1d')"
+}
+
+# -----------------------------
+# Add task
+# -----------------------------
+add_task() {
+  query=$(printf "" | fzf --print-query --prompt="Add task > " | head -n1)
+
+  [ -z "$query" ] && exit 0
+
+  todoist add "$query"
+  notify "Added: $query"
+}
+
+# -----------------------------
+# Focus mode
+# -----------------------------
+view_focus() {
+  todoist list --filter "today | overdue" | strip_header | fzf_base "Focus > " \
+    "Today + Overdue"
+}
+
+# -----------------------------
+# Menu (optional launcher mode)
+# -----------------------------
+menu() {
+  choice=$(printf "All\nToday\nOverdue\nInbox\nProjects\nFocus\nAdd\nQuit" | fzf --prompt="td > ")
+
+  case "$choice" in
+    All) view_all ;;
+    Today) view_today ;;
+    Overdue) view_overdue ;;
+    Inbox) view_inbox ;;
+    Projects) view_project ;;
+    Focus) view_focus ;;
+    Add) add_task ;;
+    *) exit 0 ;;
+  esac
+}
+
+# -----------------------------
+# Entry point
+# -----------------------------
+case "$1" in
+  list|"") view_all ;;
+  today) view_today ;;
+  overdue) view_overdue ;;
+  inbox) view_inbox ;;
+  project) view_project ;;
+  focus) view_focus ;;
+  add) add_task ;;
+  menu) menu ;;
+esac

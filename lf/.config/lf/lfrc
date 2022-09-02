@@ -1,0 +1,468 @@
+# vim:ft=conf
+# ============================================================
+#  lfrc — x230 · VoidLinux · dwm · st+sixel
+#  Author: you
+# ============================================================
+
+# ============================================================
+#  Core Settings
+# ============================================================
+
+set shell sh
+set shellopts '-eu -o pipefail'
+set ifs "\n"
+
+set icons  true
+set drawbox true
+set hidden false
+
+set ignorecase true
+set smartcase  true
+
+set number         true
+set relativenumber true
+
+set mouse     true
+set scrolloff 8
+
+set period 2                    # stat refresh interval (seconds)
+
+set ratios   1:2:3
+set info     size:time
+
+set preview  true
+set previewer ~/.config/lf/scope.sh
+set cleaner   ~/.config/lf/cleaner.sh
+
+# Cursor highlight in preview pane
+set cursorpreviewfmt "\033[7;2;33m"
+
+# ============================================================
+#  Prompt (dynamic — overridden by on-cd below)
+# ============================================================
+
+set promptfmt "\033[38;5;240m[\033[32;1m%u\033[38;5;240m@\033[36;1m%h\033[38;5;240m]\033[0m \033[34;1m%d\033[33;1m%f\033[0m "
+
+# ============================================================
+#  Dynamic Prompt — git branch + zoxide tracking
+# ============================================================
+
+cmd on-cd &{{
+    # Feed zoxide
+    zoxide add "$PWD" 2>/dev/null || true
+
+    # Build git segment if inside a repo
+    git_seg=""
+    if git_root=$(git rev-parse --show-toplevel 2>/dev/null); then
+        branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+        dirty=$(git status --porcelain 2>/dev/null | head -1)
+        indicator=""
+        [ -n "$dirty" ] && indicator="*"
+        git_seg="\033[38;5;240m [\033[33m${branch}${indicator}\033[38;5;240m]"
+    fi
+
+    fmt="\033[38;5;240m[\033[32;1m%u\033[38;5;240m@\033[36;1m%h\033[38;5;240m]\033[0m \033[34;1m%d\033[33;1m%f\033[0m${git_seg}"
+    lf -remote "send $id set promptfmt \"$(printf '%s' "$fmt" | sed 's/\\/\\\\/g;s/"/\\"/g')\""
+}}
+
+# Run on-cd at startup too
+cmd on-load &{{
+    lf -remote "send $id on-cd"
+}}
+
+# ============================================================
+#  Git status in info column (on-load hook)
+# ============================================================
+
+# Uncomment to enable per-file git status in the info column
+# set info custom
+# cmd on-load &{{
+#     cd "$(dirname "$1")" || exit 1
+#     [ "$(git rev-parse --is-inside-git-dir 2>/dev/null)" = false ] || exit 0
+#     cmds=""
+#     for file in "$@"; do
+#         status=$(git status --porcelain --ignored -- "$file" 2>/dev/null | cut -c1-2 | head -n1)
+#         cmds="${cmds}addcustominfo ${file} \"${status}\"; "
+#     done
+#     [ -n "$cmds" ] && lf -remote "send $id :$cmds"
+# }}
+
+# ============================================================
+#  Navigation
+# ============================================================
+
+# Vim-style top/bottom
+map J bottom
+map K top
+map gg top
+map G  bottom
+
+# Page scrolling
+map <c-u> half-up
+map <c-d> half-down
+map <c-b> page-up
+map <c-f> page-down
+
+# Parent dir
+map H updir
+map L open
+
+# Quick bookmarks
+map gh cd ~
+map ge cd /etc
+map gv cd ~/.config/nvim
+map gl cd ~/.local
+map gs cd ~/.local/bin
+map gd cd ~/Downloads
+map gD cd ~/Documents
+map gp cd ~/projects
+map gm cd /mnt
+map gr cd /
+map g/ cd /
+
+# ============================================================
+#  Search / Filter / Jump
+# ============================================================
+
+map /  search
+map ?  search-back
+map n  search-next
+map N  search-prev
+map f  filter
+
+# fzf — fuzzy jump (files + dirs, with preview)
+cmd fzf_jump ${{
+    res="$(
+        fd --hidden --follow --exclude .git 2>/dev/null | \
+        fzf \
+            --reverse \
+            --header="  Jump to" \
+            --preview='
+                if [ -d {} ]; then
+                    eza --all --long --group-directories-first --icons --color=always {}
+                else
+                    bat --color=always --style=plain --line-range=:200 {} 2>/dev/null || cat {}
+                fi
+            ' \
+            --preview-window=right:55%:wrap
+    )"
+    [ -z "$res" ] && exit 0
+    if [ -d "$res" ]; then
+        lf -remote "send $id cd \"$(printf '%s' "$res" | sed 's/\\/\\\\/g;s/"/\\"/g')\""
+    else
+        lf -remote "send $id select \"$(printf '%s' "$res" | sed 's/\\/\\\\/g;s/"/\\"/g')\""
+    fi
+}}
+map <c-p> fzf_jump
+
+# fzf — ripgrep content search → select file
+cmd fzf_rg ${{
+    RG_CMD="rg --column --line-number --no-heading --color=always --smart-case"
+    res="$(
+        fzf \
+            --ansi \
+            --disabled \
+            --reverse \
+            --header="  Search in files (rg)" \
+            --delimiter=: \
+            --bind="start:reload([ -n {q} ] && $RG_CMD -- {q} || true)" \
+            --bind="change:reload([ -n {q} ] && $RG_CMD -- {q} || true)" \
+            --preview='bat --color=always --highlight-line={2} --style=plain {1} 2>/dev/null' \
+            --preview-window='right:55%:+{2}-/2' \
+            --bind='enter:accept' \
+        | cut -d: -f1
+    )"
+    [ -z "$res" ] && exit 0
+    lf -remote "send $id select \"$(printf '%s' "$res" | sed 's/\\/\\\\/g;s/"/\\"/g')\""
+}}
+map <c-g> fzf_rg
+
+# zoxide interactive jump
+cmd z ${{
+    result="$(zoxide query -i | sed 's/\\/\\\\/g;s/"/\\"/g')"
+    [ -n "$result" ] && lf -remote "send $id cd \"$result\""
+}}
+# zoxide smart jump (non-interactive, pass args)
+cmd zq %{{
+    result="$(zoxide query --exclude "$PWD" "$@" 2>/dev/null | sed 's/\\/\\\\/g;s/"/\\"/g')"
+    [ -n "$result" ] && lf -remote "send $id cd \"$result\""
+}}
+
+map zi z
+map zz push :zq<space>
+
+# ============================================================
+#  Toggles
+# ============================================================
+
+map zh set hidden!
+map zp set preview!
+map zn set number!
+map zr set relativenumber!
+map zi set info size:time
+map zI set info ""
+map R  reload
+
+# ============================================================
+#  File Operations
+# ============================================================
+
+# Delete (builtin) — mapped to X for "nuclear" feels
+map X delete
+
+# Trash (FreeDesktop-spec via trash-cli)
+cmd trash %{{
+    echo "$fx" | tr '\n' '\0' | xargs -0 trash-put --
+    lf -remote "send $id reload"
+}}
+map dd trash
+map D  trash
+
+# Restore from trash (when browsing ~/.local/share/Trash/files)
+cmd trash-restore %{{
+    set -f
+    ft="$(basename -a -- $fx | sed 's|^|trash:///|')"
+    gio trash --restore $ft
+    printf 'Restored: '
+    basename -a -- $fx | tr '\n' ' '
+    echo
+}}
+map dr trash-restore
+
+# Clear selection
+map C clear
+
+# ============================================================
+#  Rename
+# ============================================================
+
+# Quick rename (push existing name into prompt)
+map r push :rename<space>
+map R reload
+
+# Bulk rename with vidir
+cmd brename ${{
+    [ -n "$fs" ] && vidir -- $fs || vidir
+}}
+map <a-r> brename
+
+# Rename only extension
+cmd rename-ext ${{
+    base="${f%.*}"
+    ext="${f##*.}"
+    lf -remote "send $id push :rename<space>$(printf '%s' "$base." | sed 's/\\/\\\\/g')"
+}}
+
+# ============================================================
+#  Create
+# ============================================================
+
+# mkdir
+map a push %mkdir<space>-p<space>
+
+# Create new file and open in editor
+cmd mkfile ${{
+    printf "Filename: "
+    read name
+    [ -z "$name" ] && exit 0
+    $EDITOR "$name"
+}}
+map A mkfile
+
+# ============================================================
+#  Archive Operations (ouch)
+# ============================================================
+
+cmd extract ${{
+    set -f
+    ouch decompress -- $fx
+    lf -remote "send $id reload"
+}}
+
+cmd pack ${{
+    set -f
+    printf "Archive name (with extension, e.g. foo.tar.gz): "
+    read name
+    [ -z "$name" ] && exit 0
+    ouch compress -- $fx "$name"
+}}
+
+# Browse archive like a dir (archivemount)
+cmd mount-archive ${{
+    mntdir="${f}.mnt"
+    mkdir -p -- "$mntdir"
+    archivemount "$f" "$mntdir"
+    lf -remote "send $id cd \"$(printf '%s' "$mntdir" | sed 's/\\/\\\\/g;s/"/\\"/g')\""
+}}
+
+map ex  extract
+map ec  pack
+map em  mount-archive
+
+# ============================================================
+#  Clipboard / Yank
+# ============================================================
+
+# Yank path(s) to xclip (X11 — no Wayland on dwm setup)
+cmd yank-path %{{
+    printf '%s' "$fx" | xclip -selection clipboard
+    printf '%s' "$fx" | wc -l | xargs printf '  Yanked %s path(s)\n'
+}}
+cmd yank-name %{{
+    basename -a -- $fx | tr '\n' '\n' | xclip -selection clipboard
+    printf '  Yanked filename(s)\n'
+}}
+cmd yank-dir %{{
+    dirname -- "$f" | xclip -selection clipboard
+    printf '  Yanked directory\n'
+}}
+
+map yp yank-path
+map yn yank-name
+map yd yank-dir
+
+# ============================================================
+#  Open / Edit
+# ============================================================
+
+cmd open &{{
+    mime="$(file --mime-type -Lb "$f")"
+    case "$mime" in
+        text/*|application/json|application/x-shellscript|inode/x-empty)
+            lf -remote "send $id \$\$EDITOR \"\$f\""
+            ;;
+        image/*)
+            nsxiv "$f" &
+            ;;
+        video/*|audio/*)
+            mpv --really-quiet "$f" &
+            ;;
+        application/pdf)
+            zathura "$f" &
+            ;;
+        application/zip|application/x-tar|application/gzip|\
+        application/x-bzip2|application/x-xz|application/x-7z-compressed|\
+        application/vnd.rar)
+            lf -remote "send $id extract"
+            ;;
+        *)
+            xdg-open "$f" >/dev/null 2>&1 &
+            ;;
+    esac
+}}
+
+map l     open
+map <enter> open
+map e     $$EDITOR "$f"
+
+# View fullscreen with pager (uses previewer as LESSOPEN pipe)
+map i $LESSOPEN='|~/.config/lf/scope.sh %s $COLUMNS $LINES 0 0' less -R "$f"
+
+# Play directory as playlist in mpv
+cmd mpv-playlist ${{
+    mpv --really-quiet -- $fx &
+}}
+map <a-p> mpv-playlist
+
+# ============================================================
+#  Paste (with progress via rsync)
+# ============================================================
+
+cmd paste &{{
+    set -- $(lf -remote 'load')
+    mode="$1"; shift
+    case "$mode" in
+        copy)
+            rsync --archive --info=progress2 --no-compress -- "$@" .
+            ;;
+        move)
+            mv --verbose -- "$@" .
+            ;;
+    esac
+    lf -remote "send $id clear"
+    lf -remote "send $id reload"
+}}
+map p paste
+
+# ============================================================
+#  Shell
+# ============================================================
+
+# Drop into shell in current dir
+map w $$SHELL
+# Execute current file
+map x $$SHELL -c '"$f"; echo; echo "Press ENTER"; read _'
+
+# ============================================================
+#  Git Commands
+# ============================================================
+
+cmd git-status $clear; git -C "$PWD" status; echo; echo "Press ENTER"; read _
+cmd git-log    $clear; git -C "$PWD" log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit | head -40; echo; echo "Press ENTER"; read _
+cmd git-diff   $clear; git -C "$PWD" diff --stat; echo; echo "Press ENTER"; read _
+cmd git-pull   $clear; git -C "$PWD" pull --rebase; echo; echo "Press ENTER"; read _
+cmd git-branch ${{
+    branch="$(git -C "$PWD" branch | fzf | xargs)"
+    [ -z "$branch" ] && exit 0
+    git -C "$PWD" checkout "$branch"
+    lf -remote "send $id reload"
+}}
+
+map gs :git-status
+map gL :git-log
+map gf :git-diff
+map gP :git-pull
+map gb :git-branch
+
+# ============================================================
+#  eza statfmt integration (bottom bar)
+# ============================================================
+
+cmd on-select &{{
+    lf -remote "send $id set statfmt \"$(
+        eza -ld --color=always -- "$f" 2>/dev/null \
+        | sed 's/\\/\\\\/g;s/"/\\"/g'
+    )\""
+}}
+
+# ============================================================
+#  Setbg (xwallpaper / feh for dwm)
+# ============================================================
+
+cmd setbg ${{
+    xwallpaper --zoom "$f" 2>/dev/null \
+    || feh --bg-fill "$f" 2>/dev/null \
+    || printf '  No wallpaper tool found\n'
+}}
+map B setbg
+
+# ============================================================
+#  Misc Utilities
+# ============================================================
+
+# Show disk usage for current dir
+cmd du ${{
+    clear
+    du -sh -- "$f" | sort -h
+    echo; echo "Press ENTER"; read _
+}}
+map <a-d> du
+
+# Count lines in file
+cmd wc ${{ wc -l -- "$f"; echo; echo "Press ENTER"; read _ }}
+
+# Touch (update mtime or create)
+cmd touch %touch -- "$f"
+
+# Chmod helper
+cmd chmod ${{
+    printf "Mode (e.g. 755): "
+    read mode
+    [ -z "$mode" ] && exit 0
+    chmod "$mode" -- $fx
+    lf -remote "send $id reload"
+}}
+map cm chmod
+
+cmd wal "$1"
+map w $wal -i $f
